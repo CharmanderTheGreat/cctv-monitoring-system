@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CCTV Monitor — Login</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0f1e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Segoe UI', sans-serif;
+            background-image: radial-gradient(ellipse at 20% 50%, rgba(0,229,255,0.03) 0%, transparent 60%),
+                              radial-gradient(ellipse at 80% 20%, rgba(0,229,255,0.05) 0%, transparent 50%);
+        }
+        .login-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+            width: 100%;
+            max-width: 420px;
+            padding: 20px;
+        }
+        .brand {
+            text-align: center;
+        }
+        .brand h1 {
+            color: #00e5ff;
+            font-size: 28px;
+            letter-spacing: 4px;
+            font-weight: 800;
+            text-shadow: 0 0 20px rgba(0,229,255,0.3);
+        }
+        .brand p {
+            color: #4b5563;
+            font-size: 12px;
+            letter-spacing: 2px;
+            margin-top: 6px;
+            text-transform: uppercase;
+        }
+        .login-box {
+            background: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 16px;
+            padding: 36px;
+            width: 100%;
+            box-shadow: 0 0 60px rgba(0,0,0,0.5), 0 0 30px rgba(0,229,255,0.03);
+        }
+        .form-group {
+            margin-bottom: 18px;
+        }
+        label {
+            display: block;
+            color: #6b7280;
+            font-size: 11px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .input-wrapper {
+            position: relative;
+        }
+        .input-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 15px;
+            opacity: 0.5;
+        }
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 12px 14px 12px 40px;
+            background: #0d1424;
+            border: 1px solid #1f2937;
+            border-radius: 10px;
+            color: #f9fafb;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s;
+        }
+        input:focus {
+            border-color: #00e5ff;
+            box-shadow: 0 0 0 3px rgba(0,229,255,0.08);
+        }
+        input:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .btn {
+            width: 100%;
+            padding: 13px;
+            background: linear-gradient(135deg, #00e5ff, #00b8d4);
+            color: #0a0f1e;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 800;
+            cursor: pointer;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            transition: all 0.2s;
+            margin-top: 8px;
+            box-shadow: 0 4px 15px rgba(0,229,255,0.2);
+        }
+        .btn:hover { 
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(0,229,255,0.3);
+        }
+        .btn:disabled {
+            background: #1f2937;
+            color: #4b5563;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .alert {
+            background: rgba(127,29,29,0.5);
+            border: 1px solid #7f1d1d;
+            color: #fca5a5;
+            padding: 10px 14px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            text-align: center;
+        }
+        .countdown-box {
+            background: rgba(28,31,46,0.8);
+            border: 1px solid #374151;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 16px;
+        }
+        .countdown-box .lock-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+        .countdown-box .timer {
+            font-size: 42px;
+            font-weight: 800;
+            color: #fcd34d;
+            letter-spacing: 4px;
+            margin: 10px 0;
+            font-variant-numeric: tabular-nums;
+        }
+        .countdown-box .timer-label {
+            color: #6b7280;
+            font-size: 11px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+        .divider hr {
+            flex: 1;
+            border: none;
+            border-top: 1px solid #1f2937;
+        }
+        .divider span {
+            color: #374151;
+            font-size: 11px;
+            letter-spacing: 1px;
+        }
+        .footer-text {
+            color: #374151;
+            font-size: 11px;
+            text-align: center;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-wrapper">
+
+        <div class="brand">
+            <h1>🎥 CCTV MONITOR</h1>
+            <p>Network Administration System</p>
+        </div>
+
+        <div class="login-box">
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% for category, message in messages %}
+                    {% if message.startswith('BLOCKED:') %}
+                        {% set secs = message.split(':')[1] %}
+                        <div class="alert">⛔ Too many failed attempts</div>
+                        <div class="countdown-box">
+                            <div class="lock-icon">🔒</div>
+                            <div class="timer-label">Access blocked — try again in</div>
+                            <div class="timer" id="countdown">--:--</div>
+                            <div class="timer-label" id="timer-msg">Please wait...</div>
+                        </div>
+                        <script>
+                            let secs = {{ secs }};
+                            const timerEl = document.getElementById('countdown');
+                            const loginBtn = document.getElementById('login-btn');
+                            const usernameInput = document.querySelector('input[name="username"]');
+                            const passwordInput = document.querySelector('input[name="password"]');
+
+                            loginBtn.disabled = true;
+                            usernameInput.disabled = true;
+                            passwordInput.disabled = true;
+
+                            function updateTimer() {
+                                const m = Math.floor(secs / 60);
+                                const s = secs % 60;
+                                timerEl.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+                            }
+                            updateTimer();
+
+                            const interval = setInterval(() => {
+                                secs--;
+                                updateTimer();
+                                if (secs <= 0) {
+                                    clearInterval(interval);
+                                    timerEl.textContent = '00:00';
+                                    timerEl.style.color = '#86efac';
+                                    loginBtn.disabled = false;
+                                    usernameInput.disabled = false;
+                                    passwordInput.disabled = false;
+                                    document.getElementById('timer-msg').textContent = '✅ You can try again now!';
+                                    setTimeout(() => window.location.reload(), 800);
+                                }
+                            }, 1000);
+                        </script>
+                    {% else %}
+                        <div class="alert">⚠ {{ message }}</div>
+                    {% endif %}
+                {% endfor %}
+            {% endwith %}
+
+            <div class="divider">
+                <hr><span>SECURE LOGIN</span><hr>
+            </div>
+
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label>Username</label>
+                    <div class="input-wrapper">
+                        <span class="input-icon">👤</span>
+                        <input type="text" name="username" placeholder="Enter your username" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <div class="input-wrapper">
+                        <span class="input-icon">🔑</span>
+                        <input type="password" name="password" placeholder="Enter your password" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn" id="login-btn">Login</button>
+            </form>
+        </div>
+
+        <div class="footer-text">🛡️ SECURED · MONITORED · PROTECTED</div>
+
+    </div>
+</body>
+</html>
