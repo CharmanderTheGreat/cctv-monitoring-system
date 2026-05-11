@@ -14,6 +14,8 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    ban_until = db.Column(db.DateTime, nullable=True)
+    failed_attempts = db.Column(db.Integer, default=0)
 
     def set_password(self, password):
         if len(password) < 8:
@@ -22,6 +24,16 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password):
         return bcrypt.check_password_hash(self.password, password)
+
+    def is_banned(self):
+        if self.ban_until and self.ban_until > datetime.utcnow():
+            return True
+        return False
+
+    def get_ban_seconds(self):
+        if self.ban_until and self.ban_until > datetime.utcnow():
+            return max(0, int((self.ban_until - datetime.utcnow()).total_seconds()))
+        return 0
 
 
 class Camera(db.Model):

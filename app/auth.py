@@ -9,40 +9,18 @@ auth = Blueprint("auth", __name__)
 
 
 def get_client_ip():
-    return request.headers.get("X-Forwarded-For", request.remote_addr)
+    return (
+        request.headers.get("X-Forwarded-For", request.remote_addr)
+        .split(",")[0]
+        .strip()
+    )
 
 
 def is_ip_blocked(ip):
     # Check permanent block
     if BlockedIP.query.filter_by(ip_address=ip).first():
-        return True
-    # Check brute force block
-    block_time = datetime.utcnow() - timedelta(minutes=15)
-    failed_attempts = LoginAttempt.query.filter(
-        LoginAttempt.ip_address == ip,
-        LoginAttempt.success == False,
-        LoginAttempt.timestamp > block_time,
-    ).count()
-    return failed_attempts >= 5
-
-
-def get_block_seconds_remaining(ip):
-    block_time = datetime.utcnow() - timedelta(minutes=15)
-    first_fail = (
-        LoginAttempt.query.filter(
-            LoginAttempt.ip_address == ip,
-            LoginAttempt.success == False,
-            LoginAttempt.timestamp > block_time,
-        )
-        .order_by(LoginAttempt.timestamp.asc())
-        .first()
-    )
-
-    if first_fail:
-        unblock_at = first_fail.timestamp + timedelta(minutes=15)
-        secs_remaining = max(0, int((unblock_at - datetime.utcnow()).total_seconds()))
-        return secs_remaining
-    return 900
+        return True, 0
+    return False, 0
 
 
 def log_attempt(ip, username, success):
@@ -50,33 +28,45 @@ def log_attempt(ip, username, success):
     db.session.add(attempt)
 
     if not success:
-        recent_fails = LoginAttempt.query.filter(
-            LoginAttempt.ip_address == ip,
-            LoginAttempt.success == False,
-            LoginAttempt.timestamp > datetime.utcnow() - timedelta(minutes=15),
-        ).count()
+        # Check user and update ban
+        user = User.query.filter_by(username=username).first()
+        if user:
+            user.failed_attempts = (user.failed_attempts or 0) + 1
+            if user.failed_attempts >= 5:
+                user.ban_until = datetime.utcnow() + timedelta(minutes=15)
+                # Create security alert
+                alert = SecurityAlert(
+                    alert_type="brute_force",
+                    source_ip=ip,
+                    description=f"Multiple failed login attempts from {ip} — {user.failed_attempts} attempts",
+                    severity="high",
+                )
+                db.session.add(alert)
+                # Send notification
+                from app.notifications import send_alert
 
-        if recent_fails >= 3:
-            alert = SecurityAlert(
-                alert_type="brute_force",
-                source_ip=ip,
-                description=f"Multiple failed login attempts from {ip} — {recent_fails} attempts in last 15 minutes",
-                severity="high",
-            )
-            db.session.add(alert)
-            db.session.commit()
-
-            # Send notification
-            from app.notifications import send_alert
-
-            send_alert(
-                subject="BRUTE FORCE ATTACK",
-                body=f"Multiple failed login attempts detected!\nIP: {ip}\nAttempts: {recent_fails}\nUsername tried: {username}",
-            )
+                send_alert(
+                    subject="BRUTE FORCE ATTACK",
+                    body=f"Multiple failed login attempts!\nIP: {ip}\nUsername: {username}\nAttempts: {user.failed_attempts}",
+                )
         else:
-            db.session.commit()
-    else:
-        db.session.commit()
+            # Unknown username — check by IP
+            recent_fails = LoginAttempt.query.filter(
+                LoginAttempt.ip_address == ip,
+                LoginAttempt.success == False,
+                LoginAttempt.timestamp > datetime.utcnow() - timedelta(minutes=15),
+            ).count()
+
+            if recent_fails >= 3:
+                alert = SecurityAlert(
+                    alert_type="brute_force",
+                    source_ip=ip,
+                    description=f"Multiple failed login attempts from {ip} — {recent_fails} attempts in last 15 minutes",
+                    severity="high",
+                )
+                db.session.add(alert)
+
+    db.session.commit()
 
 
 @auth.route("/", methods=["GET", "POST"])
@@ -88,9 +78,10 @@ def login():
 
     ip = get_client_ip()
 
-    if is_ip_blocked(ip):
-        secs = get_block_seconds_remaining(ip)
-        flash(f"BLOCKED:{secs}", "danger")
+    # Check permanent IP block
+    blocked, _ = is_ip_blocked(ip)
+    if blocked:
+        flash(f"BLOCKED:900", "danger")
         return render_template("login.html")
 
     if request.method == "POST":
@@ -107,24 +98,37 @@ def login():
 
         user = User.query.filter_by(username=username).first()
 
+        # Check if user is banned
+        if user and user.is_banned():
+            secs = user.get_ban_seconds()
+            flash(f"BLOCKED:{secs}", "danger")
+            return render_template("login.html")
+
         if user and user.check_password(password):
+            # Reset failed attempts on success
+            user.failed_attempts = 0
+            user.ban_until = None
+            db.session.commit()
             login_user(user)
             session.permanent = True
             log_attempt(ip, username, True)
             return redirect(url_for("main.dashboard"))
         else:
             log_attempt(ip, username, False)
-            fail_count = LoginAttempt.query.filter(
-                LoginAttempt.ip_address == ip,
-                LoginAttempt.success == False,
-                LoginAttempt.timestamp > datetime.utcnow() - timedelta(minutes=15),
-            ).count()
-            remaining = max(0, 5 - fail_count)
-            if remaining > 0:
-                flash(f"Invalid credentials. {remaining} attempts remaining.", "danger")
-            else:
-                secs = get_block_seconds_remaining(ip)
+
+            # Check ban status again after logging
+            if user and user.is_banned():
+                secs = user.get_ban_seconds()
                 flash(f"BLOCKED:{secs}", "danger")
+            else:
+                remaining = max(0, 5 - (user.failed_attempts if user else 0))
+                if remaining > 0:
+                    flash(
+                        f"Invalid credentials. {remaining} attempts remaining.",
+                        "danger",
+                    )
+                else:
+                    flash(f"BLOCKED:900", "danger")
 
     return render_template("login.html")
 
