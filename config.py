@@ -40,3 +40,12 @@ class Config:
     ALERT_PHONE = os.environ.get("ALERT_PHONE")
     SEMAPHORE_API_KEY = os.environ.get("SEMAPHORE_API_KEY")
     SEMAPHORE_SENDER = os.environ.get("SEMAPHORE_SENDER")
+
+    # Database (for Railway)
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "pool_recycle": 3600,
+    }
+
+    # Rate limiting - DISABLE DEFAULT LIMITS
+    RATELIMIT_DEFAULT = None

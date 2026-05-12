@@ -48,7 +48,7 @@ def create_app():
         referrer_policy="strict-origin-when-cross-origin",
     )
 
-    login_manager.login_view = "auth.login"
+    login_manager.login_view = "auth.login_page"
 
     from app.auth import auth as auth_blueprint
     from app.routes import main as main_blueprint
@@ -58,33 +58,27 @@ def create_app():
     app.register_blueprint(main_blueprint)
     app.register_blueprint(network_core_blueprint)
 
-    csrf.exempt(main_blueprint)
+    # Auto-create any missing tables (e.g. temp_blocked_ips) on startup
+    with app.app_context():
+        from app import models  # ensure all models are registered
 
-    @app.errorhandler(404)
-    def not_found(e):
-        return render_template("404.html"), 404
+        db.create_all()
 
+    # Register error handlers
+    register_error_handlers(app)
+
+    return app
+
+
+def register_error_handlers(app):
     @app.errorhandler(403)
     def forbidden(e):
         return render_template("403.html"), 403
 
+    @app.errorhandler(404)
+    def page_not_found(e):
+        return render_template("404.html"), 404
+
     @app.errorhandler(429)
     def too_many_requests(e):
         return render_template("429.html"), 429
-
-    def register_error_handlers(app):
-        @app.errorhandler(403)
-        def forbidden(e):
-            return render_template("403.html"), 403
-
-        @app.errorhandler(404)
-        def page_not_found(e):
-            return render_template("404.html"), 404
-
-        @app.errorhandler(429)
-        def too_many_requests(e):
-            return render_template("429.html"), 429
-
-    # Tapos tawagin mo ito sa loob ng create_app(app):
-    # register_error_handlers(app)
-    return app

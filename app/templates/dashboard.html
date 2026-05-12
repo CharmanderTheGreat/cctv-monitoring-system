@@ -497,7 +497,13 @@
 
     function scanNetwork() {
         showToast('Scanning network...');
-        fetch('/api/network/scan')
+        fetch('/api/network/scan', {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+    }
+})
         .then(r => r.json())
         .then(devices => {
             const tbody = document.getElementById('logs-table');

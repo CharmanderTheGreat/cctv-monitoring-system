@@ -14,6 +14,17 @@ from app import db, limiter
 from datetime import datetime
 import random
 import bleach
+import ipaddress
+import re
+
+
+def validate_ip_address(ip):
+    try:
+        ipaddress.ip_address(ip)
+        return True
+    except ValueError:
+        return False
+
 
 main = Blueprint("main", __name__)
 
@@ -47,9 +58,8 @@ def dashboard():
 def audit():
     audit_logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).all()
     honeypot_logs = HoneypotLog.query.order_by(HoneypotLog.timestamp.desc()).all()
-    login_attempts = (
-        LoginAttempt.query.order_by(LoginAttempt.timestamp.desc()).limit(50).all()
-    )
+    login_attempts = LoginAttempt.query.order_by(LoginAttempt.timestamp.desc()).all()
+
     return render_template(
         "audit.html",
         audit_logs=audit_logs,
@@ -60,7 +70,7 @@ def audit():
 
 @main.route("/api/cameras")
 @login_required
-@limiter.limit("30 per minute")
+@limiter.limit("60 per minute")
 def get_cameras():
     cameras = Camera.query.all()
     return jsonify(
@@ -88,6 +98,10 @@ def add_camera():
 
     name = bleach.clean(data.get("name", ""))
     ip_address = bleach.clean(data.get("ip_address", ""))
+
+    if not validate_ip_address(ip_address):
+        return jsonify({"success": False, "error": "Invalid IP address format"}), 400
+
     location = bleach.clean(data.get("location", ""))
 
     if not name or not ip_address or not location:
@@ -95,6 +109,12 @@ def add_camera():
 
     if len(name) > 100 or len(ip_address) > 50 or len(location) > 100:
         return jsonify({"success": False, "error": "Input too long"}), 400
+
+    existing_camera = Camera.query.filter_by(ip_address=ip_address).first()
+    if existing_camera:
+        return jsonify(
+            {"success": False, "error": "Camera with this IP already exists"}
+        ), 400
 
     camera = Camera(
         name=name,
@@ -111,7 +131,7 @@ def add_camera():
 
 @main.route("/api/cameras/delete/<int:camera_id>", methods=["DELETE"])
 @login_required
-@limiter.limit("10 per minute")
+@limiter.limit("10 per minute")  # Iwas spam delete
 def delete_camera(camera_id):
     camera = Camera.query.get_or_404(camera_id)
     log_action(f"Deleted camera: {camera.name} ({camera.ip_address})")
@@ -120,11 +140,13 @@ def delete_camera(camera_id):
     return jsonify({"success": True})
 
 
-@main.route("/api/network/scan")
+@main.route("/api/network/scan", methods=["POST"])
 @login_required
-@limiter.limit("10 per minute")
+@limiter.limit("3 per minute")
 def scan_network():
     NetworkLog.query.delete()
+    db.session.commit()
+
     base_devices = [
         {
             "ip": "192.168.1.1",
@@ -194,7 +216,7 @@ def get_alerts():
 
 @main.route("/api/alerts/simulate")
 @login_required
-@limiter.limit("20 per minute")
+@limiter.limit("5 per minute")
 def simulate_alert():
     attack_types = [
         {
@@ -225,7 +247,6 @@ def simulate_alert():
     db.session.commit()
     log_action(f"Simulated attack: {attack['type']}")
 
-    # Send notification
     send_alert(
         subject=attack["type"].upper().replace("_", " "),
         body=f"{attack['desc']}\nSource IP: {source_ip}\nSeverity: {attack['severity'].upper()}",
@@ -308,6 +329,7 @@ def unblock_ip():
 
 @main.route("/api/blocked-ips")
 @login_required
+@limiter.limit("30 per minute")
 def get_blocked_ips():
     blocked = BlockedIP.query.order_by(BlockedIP.timestamp.desc()).all()
     return jsonify(
