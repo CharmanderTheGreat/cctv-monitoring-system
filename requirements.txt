@@ -37,6 +37,7 @@ psycopg2-binary==2.9.12
 PyJWT==2.12.1
 python-dotenv==1.2.2
 python-nmap==0.7.1
+pytz==2026.2
 requests==2.33.1
 scapy==2.7.0
 SQLAlchemy==2.0.49

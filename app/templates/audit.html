@@ -229,7 +229,7 @@
                             <span class="badge badge-danger">FAILED</span>
                             {% endif %}
                         </td>
-                        <td>{{ attempt.timestamp.strftime('%H:%M:%S') }}</td>
+                        <td>{{ attempt.timestamp.strftime('%Y-%m-%d %I:%M:%S %p') }}</td>
                         <td>
                             <button class="btn btn-danger" onclick="blockIP('{{ attempt.ip_address }}', 'Suspicious login activity')">🚫</button>
                         </td>
@@ -269,7 +269,7 @@
                         <td style="color:#00e5ff;">{{ log.user }}</td>
                         <td>{{ log.action }}</td>
                         <td>{{ log.ip_address }}</td>
-                        <td>{{ log.timestamp.strftime('%H:%M:%S') }}</td>
+                        <td>{{ log.timestamp.strftime('%Y-%m-%d %I:%M:%S %p') }}</td>
                     </tr>
                     {% else %}
                     <tr><td colspan="4" class="empty">No activity yet</td></tr>

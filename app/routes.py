@@ -11,11 +11,15 @@ from app.models import (
     BlockedIP,
 )
 from app import db, limiter
-from datetime import datetime
+from datetime import datetime, timedelta
+from pytz import timezone
 import random
 import bleach
 import ipaddress
 import re
+
+# Philippine timezone (UTC+8)
+PH_TZ = timezone("Asia/Manila")
 
 
 def validate_ip_address(ip):
@@ -34,6 +38,13 @@ def log_action(action):
     audit = AuditLog(user=current_user.username, action=action, ip_address=ip)
     db.session.add(audit)
     db.session.commit()
+
+
+def convert_to_ph_time(dt):
+    """Convert UTC datetime to Philippine time"""
+    if dt is None:
+        return None
+    return dt.astimezone(PH_TZ)
 
 
 @main.route("/dashboard")
@@ -59,6 +70,14 @@ def audit():
     audit_logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).all()
     honeypot_logs = HoneypotLog.query.order_by(HoneypotLog.timestamp.desc()).all()
     login_attempts = LoginAttempt.query.order_by(LoginAttempt.timestamp.desc()).all()
+
+    # Convert to Philippine time
+    for log in audit_logs:
+        log.timestamp = convert_to_ph_time(log.timestamp)
+    for log in honeypot_logs:
+        log.timestamp = convert_to_ph_time(log.timestamp)
+    for attempt in login_attempts:
+        attempt.timestamp = convert_to_ph_time(attempt.timestamp)
 
     return render_template(
         "audit.html",
@@ -131,7 +150,7 @@ def add_camera():
 
 @main.route("/api/cameras/delete/<int:camera_id>", methods=["DELETE"])
 @login_required
-@limiter.limit("10 per minute")  # Iwas spam delete
+@limiter.limit("10 per minute")
 def delete_camera(camera_id):
     camera = Camera.query.get_or_404(camera_id)
     log_action(f"Deleted camera: {camera.name} ({camera.ip_address})")
@@ -206,7 +225,9 @@ def get_alerts():
                 "source_ip": a.source_ip,
                 "description": a.description,
                 "severity": a.severity,
-                "timestamp": a.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": convert_to_ph_time(a.timestamp).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
                 "is_resolved": a.is_resolved,
             }
             for a in alerts
@@ -281,7 +302,9 @@ def get_logs():
                 "mac_address": l.mac_address,
                 "hostname": l.hostname,
                 "status": l.status,
-                "timestamp": l.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": convert_to_ph_time(l.timestamp).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
             }
             for l in logs
         ]
@@ -339,7 +362,9 @@ def get_blocked_ips():
                 "ip_address": b.ip_address,
                 "reason": b.reason,
                 "blocked_by": b.blocked_by,
-                "timestamp": b.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": convert_to_ph_time(b.timestamp).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
             }
             for b in blocked
         ]
