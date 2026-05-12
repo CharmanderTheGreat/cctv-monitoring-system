@@ -97,18 +97,13 @@ def login():
 
     ip = get_client_ip()
 
-    # Check blocks (para sa GET at POST)
+    # Check permanent block
     if is_ip_blocked(ip):
         flash("Access denied. Contact administrator.", "danger")
         return render_template("login.html")
 
     # POST request (form submission)
     if request.method == "POST":
-        # Rate limit para sa POST lang
-        if not limiter.limit("5 per minute")(lambda: True)():
-            flash("Too many login attempts. Please wait a moment.", "danger")
-            return render_template("login.html")
-
         if is_ip_temp_banned(ip):
             secs = get_ip_ban_seconds(ip)
             flash(f"Too many failed attempts. Try again in {secs} seconds.", "danger")
