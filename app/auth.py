@@ -81,9 +81,7 @@ def log_attempt(ip, username, success):
 
             send_alert(
                 subject="BRUTE FORCE ATTACK",
-                body=(
-                    f"Multiple failed login attempts\nIP: {ip}\nUsername: {username}"
-                ),
+                body=f"Multiple failed login attempts\nIP: {ip}\nUsername: {username}",
             )
         else:
             db.session.commit()
@@ -91,18 +89,70 @@ def log_attempt(ip, username, success):
         db.session.commit()
 
 
-@auth.route("/", methods=["GET"])
-@auth.route("/login", methods=["GET"])
-def login_page():
+@auth.route("/", methods=["GET", "POST"])
+@auth.route("/login", methods=["GET", "POST"])
+def login():
     if current_user.is_authenticated:
         return redirect(url_for("main.dashboard"))
 
     ip = get_client_ip()
 
+    # Check blocks (para sa GET at POST)
     if is_ip_blocked(ip):
         flash("Access denied. Contact administrator.", "danger")
         return render_template("login.html")
 
+    # POST request (form submission)
+    if request.method == "POST":
+        # Rate limit para sa POST lang
+        if not limiter.limit("5 per minute")(lambda: True)():
+            flash("Too many login attempts. Please wait a moment.", "danger")
+            return render_template("login.html")
+
+        if is_ip_temp_banned(ip):
+            secs = get_ip_ban_seconds(ip)
+            flash(f"Too many failed attempts. Try again in {secs} seconds.", "danger")
+            return render_template("login.html")
+
+        username = bleach.clean(request.form.get("username", ""))
+        password = request.form.get("password", "")
+
+        if not username or not password:
+            flash("Invalid credentials.", "danger")
+            return render_template("login.html")
+
+        if len(username) > 80 or len(password) > 200:
+            flash("Invalid credentials.", "danger")
+            return render_template("login.html")
+
+        user = User.query.filter_by(username=username).first()
+
+        if user and user.check_password(password):
+            login_user(user)
+            session.permanent = True
+            log_attempt(ip, username, True)
+            return redirect(url_for("main.dashboard"))
+        else:
+            log_attempt(ip, username, False)
+
+            if is_ip_temp_banned(ip):
+                secs = get_ip_ban_seconds(ip)
+                flash(
+                    f"Too many failed attempts. Try again in {secs} seconds.", "danger"
+                )
+            else:
+                block_time = datetime.utcnow() - timedelta(minutes=15)
+                fail_count = LoginAttempt.query.filter(
+                    LoginAttempt.ip_address == ip,
+                    LoginAttempt.success == False,
+                    LoginAttempt.timestamp > block_time,
+                ).count()
+                remaining = max(0, 5 - fail_count)
+                flash(f"Invalid credentials. {remaining} attempts remaining.", "danger")
+
+            return render_template("login.html")
+
+    # GET request (page refresh)
     if is_ip_temp_banned(ip):
         blocked = TempBlockedIP.query.filter_by(ip_address=ip).first()
         if blocked:
@@ -112,68 +162,10 @@ def login_page():
             remaining_seconds = max(0, remaining_seconds)
         else:
             remaining_seconds = 0
-
-        session.pop("_flashes", None)
         flash("Too many failed attempts. Access blocked.", "danger")
         return render_template("login.html", ban_seconds=remaining_seconds)
 
     return render_template("login.html")
-
-
-@auth.route("/login", methods=["POST"])
-@limiter.limit(
-    "5 per minute"
-)  # 5 attempts per minute - protection sa automated attacks
-def login_submit():
-    if current_user.is_authenticated:
-        return redirect(url_for("main.dashboard"))
-
-    ip = get_client_ip()
-
-    if is_ip_blocked(ip):
-        flash("Access denied. Contact administrator.", "danger")
-        return redirect(url_for("auth.login_page"))
-
-    if is_ip_temp_banned(ip):
-        secs = get_ip_ban_seconds(ip)
-        flash(f"Too many failed attempts. Try again in {secs} seconds.", "danger")
-        return redirect(url_for("auth.login_page"))
-
-    username = bleach.clean(request.form.get("username", ""))
-    password = request.form.get("password", "")
-
-    if not username or not password:
-        flash("Invalid credentials.", "danger")
-        return redirect(url_for("auth.login_page"))
-
-    if len(username) > 80 or len(password) > 200:
-        flash("Invalid credentials.", "danger")
-        return redirect(url_for("auth.login_page"))
-
-    user = User.query.filter_by(username=username).first()
-
-    if user and user.check_password(password):
-        login_user(user)
-        session.permanent = True
-        log_attempt(ip, username, True)
-        return redirect(url_for("main.dashboard"))
-    else:
-        log_attempt(ip, username, False)
-
-        if is_ip_temp_banned(ip):
-            secs = get_ip_ban_seconds(ip)
-            flash(f"Too many failed attempts. Try again in {secs} seconds.", "danger")
-        else:
-            block_time = datetime.utcnow() - timedelta(minutes=15)
-            fail_count = LoginAttempt.query.filter(
-                LoginAttempt.ip_address == ip,
-                LoginAttempt.success == False,
-                LoginAttempt.timestamp > block_time,
-            ).count()
-            remaining = max(0, 5 - fail_count)
-            flash(f"Invalid credentials. {remaining} attempts remaining.", "danger")
-
-        return redirect(url_for("auth.login_page"))
 
 
 @auth.route("/logout")
@@ -181,4 +173,4 @@ def login_submit():
 def logout():
     session.clear()
     logout_user()
-    return redirect(url_for("auth.login_page"))
+    return redirect(url_for("auth.login"))

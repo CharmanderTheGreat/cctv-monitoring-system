@@ -48,7 +48,7 @@ def create_app():
         referrer_policy="strict-origin-when-cross-origin",
     )
 
-    login_manager.login_view = "auth.login_page"
+    login_manager.login_view = "auth.login"
 
     from app.auth import auth as auth_blueprint
     from app.routes import main as main_blueprint
