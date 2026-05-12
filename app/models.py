@@ -103,3 +103,15 @@ class BlockedIP(db.Model):
     reason = db.Column(db.String(200))
     blocked_by = db.Column(db.String(80))
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class TempBlockedIP(db.Model):
+    __tablename__ = "temp_blocked_ips"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    ip_address = db.Column(db.String(50), unique=True, nullable=False)
+
+    blocked_until = db.Column(db.DateTime, nullable=False)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)

@@ -1,6 +1,12 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash, session
 from flask_login import login_user, logout_user, login_required, current_user
-from app.models import User, LoginAttempt, SecurityAlert, BlockedIP
+from app.models import (
+    User,
+    LoginAttempt,
+    SecurityAlert,
+    BlockedIP,
+    TempBlockedIP,
+)
 from app import db, limiter
 from datetime import datetime, timedelta
 import bleach
@@ -24,63 +30,84 @@ def is_ip_blocked(ip):
 
 
 def get_ip_ban_seconds(ip):
-    block_time = datetime.utcnow() - timedelta(minutes=15)
-    first_fail = (
-        LoginAttempt.query.filter(
-            LoginAttempt.ip_address == ip,
-            LoginAttempt.success == False,
-            LoginAttempt.timestamp > block_time,
-        )
-        .order_by(LoginAttempt.timestamp.asc())
-        .first()
-    )
-    if first_fail:
-        unblock_at = first_fail.timestamp + timedelta(minutes=15)
-        secs = max(0, int((unblock_at - datetime.utcnow()).total_seconds()))
-        return secs
-    return 900
+    blocked = TempBlockedIP.query.filter_by(ip_address=ip).first()
+
+    if not blocked:
+        return 0
+
+    seconds = int((blocked.blocked_until - datetime.utcnow()).total_seconds())
+
+    return max(0, seconds)
 
 
 def is_ip_temp_banned(ip):
-    block_time = datetime.utcnow() - timedelta(minutes=15)
-    fail_count = LoginAttempt.query.filter(
-        LoginAttempt.ip_address == ip,
-        LoginAttempt.success == False,
-        LoginAttempt.timestamp > block_time,
-    ).count()
-    return fail_count >= 5
+    blocked = TempBlockedIP.query.filter_by(ip_address=ip).first()
+
+    if not blocked:
+        return False
+
+    # expired
+    if blocked.blocked_until < datetime.utcnow():
+        db.session.delete(blocked)
+        db.session.commit()
+        return False
+
+    return True
 
 
 def log_attempt(ip, username, success):
-    attempt = LoginAttempt(ip_address=ip, username=username, success=success)
+    attempt = LoginAttempt(
+        ip_address=ip,
+        username=username,
+        success=success,
+    )
+
     db.session.add(attempt)
 
     if not success:
         block_time = datetime.utcnow() - timedelta(minutes=15)
+
         recent_fails = LoginAttempt.query.filter(
             LoginAttempt.ip_address == ip,
             LoginAttempt.success == False,
             LoginAttempt.timestamp > block_time,
         ).count()
 
+        # CREATE TEMP BAN
         if recent_fails >= 5:
+            existing_block = TempBlockedIP.query.filter_by(ip_address=ip).first()
+
+            if not existing_block:
+                blocked = TempBlockedIP(
+                    ip_address=ip,
+                    blocked_until=datetime.utcnow() + timedelta(minutes=15),
+                )
+
+                db.session.add(blocked)
+
             alert = SecurityAlert(
                 alert_type="brute_force",
                 source_ip=ip,
-                description=f"Brute force attack from {ip} — {recent_fails} failed attempts in 15 minutes",
+                description=f"Brute force attack from {ip}",
                 severity="high",
             )
+
             db.session.add(alert)
+
             db.session.commit()
 
             from app.notifications import send_alert
 
             send_alert(
                 subject="BRUTE FORCE ATTACK",
-                body=f"Multiple failed login attempts!\nIP: {ip}\nUsername tried: {username}\nAttempts: {recent_fails}",
+                body=(
+                    f"Multiple failed login attempts\nIP: {ip}\nUsername: {username}"
+                ),
             )
+
         else:
             db.session.commit()
+
     else:
         db.session.commit()
 
