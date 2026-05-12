@@ -60,6 +60,11 @@ def create_app():
 
     csrf.exempt(main_blueprint)
 
+    # Auto-create any missing tables (e.g. temp_blocked_ips) on startup
+    with app.app_context():
+        from app import models  # ensure all models are registered
+        db.create_all()
+
     @app.errorhandler(404)
     def not_found(e):
         return render_template("404.html"), 404
