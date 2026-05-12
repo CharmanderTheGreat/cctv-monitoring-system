@@ -61,28 +61,23 @@ def log_attempt(ip, username, success):
         username=username,
         success=success,
     )
-
     db.session.add(attempt)
 
     if not success:
         block_time = datetime.utcnow() - timedelta(minutes=15)
-
         recent_fails = LoginAttempt.query.filter(
             LoginAttempt.ip_address == ip,
             LoginAttempt.success == False,
             LoginAttempt.timestamp > block_time,
         ).count()
 
-        # CREATE TEMP BAN
         if recent_fails >= 5:
             existing_block = TempBlockedIP.query.filter_by(ip_address=ip).first()
-
             if not existing_block:
                 blocked = TempBlockedIP(
                     ip_address=ip,
                     blocked_until=datetime.utcnow() + timedelta(minutes=15),
                 )
-
                 db.session.add(blocked)
 
             alert = SecurityAlert(
@@ -91,23 +86,19 @@ def log_attempt(ip, username, success):
                 description=f"Brute force attack from {ip}",
                 severity="high",
             )
-
             db.session.add(alert)
-
             db.session.commit()
 
             from app.notifications import send_alert
-
             send_alert(
                 subject="BRUTE FORCE ATTACK",
                 body=(
-                    f"Multiple failed login attempts\nIP: {ip}\nUsername: {username}"
+                    f"Multiple failed login attempts\n"
+                    f"IP: {ip}\nUsername: {username}"
                 ),
             )
-
         else:
             db.session.commit()
-
     else:
         db.session.commit()
 
