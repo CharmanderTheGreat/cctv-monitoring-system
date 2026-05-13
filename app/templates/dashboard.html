@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>CCTV Monitor — Dashboard</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -496,30 +497,29 @@
     }
 
     function scanNetwork() {
-        showToast('Scanning network...');
-        fetch('/api/network/scan', {
-    method: 'POST',
-    headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-    }
-})
-        .then(r => r.json())
-        .then(devices => {
-            const tbody = document.getElementById('logs-table');
-            tbody.innerHTML = '';
-            devices.forEach(d => {
-                tbody.innerHTML += `
-                    <tr>
-                        <td>${d.ip}</td>
-                        <td>${d.hostname}</td>
-                        <td><span class="badge badge-active">ACTIVE</span></td>
-                    </tr>`;
-            });
-            document.getElementById('device-count').textContent = devices.length;
-            showToast(`Found ${devices.length} devices!`);
+    showToast('Scanning network...');
+    fetch('/api/network/scan', {
+        method: 'POST',  // DAPAT POST
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(r => r.json())
+    .then(devices => {
+        const tbody = document.getElementById('logs-table');
+        tbody.innerHTML = '';
+        devices.forEach(d => {
+            tbody.innerHTML += `
+                <tr>
+                    <td>${d.ip}</td>
+                    <td>${d.hostname}</td>
+                    <td><span class="badge badge-active">ACTIVE</span></td>
+                </tr>`;
         });
-    }
+        document.getElementById('device-count').textContent = devices.length;
+        showToast(`Found ${devices.length} devices!`);
+    });
+}
 
     function simulateAttack() {
         fetch('/api/alerts/simulate')

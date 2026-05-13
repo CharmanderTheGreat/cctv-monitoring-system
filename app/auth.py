@@ -107,7 +107,7 @@ def login():
         if is_ip_temp_banned(ip):
             secs = get_ip_ban_seconds(ip)
             flash(f"Too many failed attempts. Try again in {secs} seconds.", "danger")
-            return render_template("login.html")
+            return render_template("login.html", ban_seconds=secs)
 
         username = bleach.clean(request.form.get("username", ""))
         password = request.form.get("password", "")
@@ -135,6 +135,7 @@ def login():
                 flash(
                     f"Too many failed attempts. Try again in {secs} seconds.", "danger"
                 )
+                return render_template("login.html", ban_seconds=secs)
             else:
                 block_time = datetime.utcnow() - timedelta(minutes=15)
                 fail_count = LoginAttempt.query.filter(
@@ -144,8 +145,7 @@ def login():
                 ).count()
                 remaining = max(0, 5 - fail_count)
                 flash(f"Invalid credentials. {remaining} attempts remaining.", "danger")
-
-            return render_template("login.html")
+                return render_template("login.html")
 
     # GET request (page refresh)
     if is_ip_temp_banned(ip):
