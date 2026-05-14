@@ -223,9 +223,11 @@
                         <td>{{ attempt.ip_address }}</td>
                         <td>
                             {% if attempt.username == current_user.username %}
-                                <strong style="background: #00e5ff20; padding: 2px 10px; border-radius: 15px;">👤 YOU ({{ attempt.username }})</strong>
+                                <span style="color: #00e5ff;">👤</span> 
+                                <strong style="background: #00e5ff20; padding: 2px 6px; border-radius: 10px;">YOU</strong>
+                                <span style="color: #00e5ff;"> {{ attempt.username }}</span>
                             {% else %}
-                                👤 {{ attempt.username }}
+                                <span style="color: #6b7280;">👤</span> {{ attempt.username }}
                             {% endif %}
                         </td>
                         <td>

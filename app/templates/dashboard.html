@@ -266,6 +266,7 @@
 </head>
 <body>
 
+
 <div class="navbar">
     <h1>🎥 CCTV MONITOR</h1>
     <div class="nav-links">
@@ -313,15 +314,15 @@
                     <div class="cam-ip">{{ camera.ip_address }}</div>
                 </div>
                 <div class="camera-info">
-                    <div>
-                        <h3>{{ camera.name }}</h3>
-                        <p>{{ camera.location }}</p>
-                    </div>
-                    <div style="display:flex; gap:6px; align-items:center;">
-                        <span class="badge badge-{{ camera.status }}">{{ camera.status|upper }}</span>
-                        <button class="btn btn-danger" onclick="deleteCamera({{ camera.id }})">✕</button>
-                    </div>
-                </div>
+    <div>
+        <h3>{{ camera.name }}</h3>
+        <p>{{ camera.location }}</p>
+    </div>
+    <div style="display:flex; gap:6px; align-items:center;">
+        <span class="badge badge-{{ camera.status }}">{{ camera.status|upper }}</span>
+        <button class="btn btn-danger" onclick="deleteCamera({{ camera.id }})">✕</button>
+    </div>
+</div>
             </div>
             {% else %}
             <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:#374151;">
@@ -467,9 +468,15 @@
         const ip = document.getElementById('cam-ip').value;
         const location = document.getElementById('cam-location').value;
         if (!name || !ip || !location) { showToast('Please fill all fields!'); return; }
+        
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        
         fetch('/api/cameras/add', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
             body: JSON.stringify({ name, ip_address: ip, location })
         })
         .then(r => r.json())
@@ -484,7 +491,15 @@
 
     function deleteCamera(id) {
         if (!confirm('Delete this camera?')) return;
-        fetch(`/api/cameras/delete/${id}`, { method: 'DELETE' })
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        
+        fetch(`/api/cameras/delete/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            }
+        })
         .then(r => r.json())
         .then(data => {
             if (data.success) {
@@ -497,29 +512,38 @@
     }
 
     function scanNetwork() {
-    showToast('Scanning network...');
-    fetch('/api/network/scan', {
-        method: 'POST',  // DAPAT POST
-        headers: {
-            'Content-Type': 'application/json'
-        }
-    })
-    .then(r => r.json())
-    .then(devices => {
-        const tbody = document.getElementById('logs-table');
-        tbody.innerHTML = '';
-        devices.forEach(d => {
-            tbody.innerHTML += `
-                <tr>
-                    <td>${d.ip}</td>
-                    <td>${d.hostname}</td>
-                    <td><span class="badge badge-active">ACTIVE</span></td>
-                </tr>`;
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        showToast('Scanning network...');
+        fetch('/api/network/scan', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            }
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('Network scan failed');
+            return response.json();
+        })
+        .then(devices => {
+            const tbody = document.getElementById('logs-table');
+            tbody.innerHTML = '';
+            devices.forEach(d => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${d.ip}</td>
+                        <td>${d.hostname}</td>
+                        <td><span class="badge badge-active">ACTIVE</span></td>
+                    </tr>`;
+            });
+            document.getElementById('device-count').textContent = devices.length;
+            showToast(`Found ${devices.length} devices!`);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Failed to scan network');
         });
-        document.getElementById('device-count').textContent = devices.length;
-        showToast(`Found ${devices.length} devices!`);
-    });
-}
+    }
 
     function simulateAttack() {
         fetch('/api/alerts/simulate')
@@ -531,33 +555,69 @@
     }
 
     function resolveAlert(id) {
-        fetch(`/api/alerts/resolve/${id}`, { method: 'POST' })
-        .then(r => r.json())
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        
+        fetch(`/api/alerts/resolve/${id}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Server responded with ' + response.status);
+            }
+            return response.json();
+        })
         .then(data => {
             if (data.success) {
                 const row = document.getElementById(`alert-${id}`);
-                row.style.opacity = '0.4';
-                row.querySelector('td:last-child').innerHTML = '<span style="color:#6b7280; font-size:11px;">Resolved</span>';
+                if (row) {
+                    row.style.opacity = '0.4';
+                    const lastCell = row.querySelector('td:last-child');
+                    if (lastCell) {
+                        lastCell.innerHTML = '<span style="color:#6b7280; font-size:11px;">Resolved</span>';
+                    }
+                }
                 const count = document.getElementById('alert-count');
-                count.textContent = parseInt(count.textContent) - 1;
+                if (count) {
+                    count.textContent = parseInt(count.textContent) - 1;
+                }
                 showToast('Alert resolved!');
+            } else {
+                showToast('Failed to resolve alert: ' + (data.error || 'Unknown error'));
             }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error resolving alert');
         });
     }
+
     function blockIPFromAlert(ip, alertType) {
         if (!confirm(`Block IP ${ip}?\nReason: ${alertType} attack detected`)) return;
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        
         fetch('/api/block-ip', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
             body: JSON.stringify({ ip, reason: `${alertType} attack detected` })
         })
-        .then(r => r.json())
+        .then(response => response.json())
         .then(data => {
             if (data.success) {
                 showToast(`🚫 IP ${ip} blocked!`);
             } else {
                 showToast(`⚠ ${data.error}`);
             }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Failed to block IP');
         });
     }
 </script>
