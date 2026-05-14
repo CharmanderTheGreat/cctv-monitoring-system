@@ -1,4 +1,11 @@
-from flask import Blueprint, render_template, jsonify, request
+from flask import (
+    Blueprint,
+    render_template,
+    jsonify,
+    request,
+    Response,
+    stream_with_context,
+)
 from flask_login import login_required, current_user
 from app.notifications import send_alert
 from app.models import (
@@ -17,6 +24,7 @@ import random
 import bleach
 import ipaddress
 import re
+import cv2
 
 # Philippine timezone (UTC+8)
 PH_TZ = timezone("Asia/Manila")
@@ -45,6 +53,65 @@ def convert_to_ph_time(dt):
     if dt is None:
         return None
     return dt.astimezone(PH_TZ)
+
+
+# ─── Camera Streaming ─────────────────────────────────────────────────────────
+
+
+def generate_frames(source):
+    """
+    Generator function that yields MJPEG frames from a camera source.
+    source: int (device index, e.g. 0 for webcam) or str (RTSP URL)
+    """
+    cap = cv2.VideoCapture(source)
+    if not cap.isOpened():
+        return
+
+    try:
+        while True:
+            success, frame = cap.read()
+            if not success:
+                break
+            ret, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+            if not ret:
+                break
+            frame_bytes = buffer.tobytes()
+            yield (
+                b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n"
+            )
+    finally:
+        cap.release()
+
+
+@main.route("/api/cameras/stream/webcam")
+@login_required
+def stream_webcam():
+    """Stream the server device's default webcam (index 0) as MJPEG."""
+    return Response(
+        stream_with_context(generate_frames(0)),
+        mimetype="multipart/x-mixed-replace; boundary=frame",
+    )
+
+
+@main.route("/api/cameras/stream/rtsp")
+@login_required
+def stream_rtsp():
+    """
+    Stream an IP camera via its RTSP URL as MJPEG.
+    Pass the RTSP URL as a query param: /api/cameras/stream/rtsp?url=rtsp://...
+    """
+    rtsp_url = request.args.get("url", "")
+
+    if not rtsp_url.startswith("rtsp://"):
+        return jsonify({"error": "Invalid RTSP URL. Must start with rtsp://"}), 400
+
+    return Response(
+        stream_with_context(generate_frames(rtsp_url)),
+        mimetype="multipart/x-mixed-replace; boundary=frame",
+    )
+
+
+# ─── Dashboard ────────────────────────────────────────────────────────────────
 
 
 @main.route("/dashboard")
@@ -88,6 +155,9 @@ def audit():
     )
 
 
+# ─── Camera API ───────────────────────────────────────────────────────────────
+
+
 @main.route("/api/cameras")
 @login_required
 @limiter.limit("60 per minute")
@@ -118,10 +188,6 @@ def add_camera():
 
     name = bleach.clean(data.get("name", ""))
     ip_address = bleach.clean(data.get("ip_address", ""))
-
-    if not validate_ip_address(ip_address):
-        return jsonify({"success": False, "error": "Invalid IP address format"}), 400
-
     location = bleach.clean(data.get("location", ""))
 
     if not name or not ip_address or not location:
@@ -130,16 +196,26 @@ def add_camera():
     if len(name) > 100 or len(ip_address) > 50 or len(location) > 100:
         return jsonify({"success": False, "error": "Input too long"}), 400
 
+    # Allow '0.0.0.0' as the special webcam identifier; validate all others
+    if ip_address != "0.0.0.0" and not validate_ip_address(ip_address):
+        return jsonify({"success": False, "error": "Invalid IP address format"}), 400
+
     existing_camera = Camera.query.filter_by(ip_address=ip_address).first()
     if existing_camera:
         return jsonify(
             {"success": False, "error": "Camera with this IP already exists"}
         ), 400
 
+    # Webcam uses a special rtsp_url value; IP cameras build the standard URL
+    if ip_address == "0.0.0.0":
+        rtsp_url = "webcam"
+    else:
+        rtsp_url = f"rtsp://{ip_address}:554/stream"
+
     camera = Camera(
         name=name,
         ip_address=ip_address,
-        rtsp_url=f"rtsp://{ip_address}:554/stream",
+        rtsp_url=rtsp_url,
         location=location,
         status="active",
     )
@@ -158,6 +234,9 @@ def delete_camera(camera_id):
     db.session.delete(camera)
     db.session.commit()
     return jsonify({"success": True})
+
+
+# ─── Network ──────────────────────────────────────────────────────────────────
 
 
 @main.route("/api/network/scan", methods=["POST"])
@@ -190,6 +269,8 @@ def scan_network():
 
     cameras = Camera.query.all()
     for cam in cameras:
+        if cam.ip_address == "0.0.0.0":
+            continue  # skip webcam entries from network scan
         base_devices.append(
             {
                 "ip": cam.ip_address,
@@ -211,6 +292,9 @@ def scan_network():
     db.session.commit()
     log_action("Scanned network")
     return jsonify(base_devices)
+
+
+# ─── Alerts ───────────────────────────────────────────────────────────────────
 
 
 @main.route("/api/alerts")
@@ -290,6 +374,9 @@ def resolve_alert(alert_id):
     return jsonify({"success": True})
 
 
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+
+
 @main.route("/api/logs")
 @login_required
 @limiter.limit("30 per minute")
@@ -310,6 +397,9 @@ def get_logs():
             for l in logs
         ]
     )
+
+
+# ─── IP Blocking ──────────────────────────────────────────────────────────────
 
 
 @main.route("/api/block-ip", methods=["POST"])

@@ -124,7 +124,7 @@ def login():
 
         if user and user.check_password(password):
             login_user(user)
-            session.permanent = True
+            session.permanent = False
             log_attempt(ip, username, True)
             return redirect(url_for("main.dashboard"))
         else:

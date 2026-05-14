@@ -47,7 +47,6 @@
         .stat-card .number { font-size: 22px; font-weight: bold; color: #00e5ff; }
         .stat-card .label { color: #6b7280; font-size: 11px; margin-top: 2px; }
 
-        /* MAIN CONTENT — left cameras, right stacked tables */
         .main-content {
             display: grid;
             grid-template-columns: 1fr 480px;
@@ -108,6 +107,7 @@
             display: flex;
             flex-direction: column;
             min-height: 0;
+            flex: 1;
         }
         .camera-feed {
             background: #000;
@@ -118,34 +118,17 @@
             align-items: center;
             justify-content: center;
             position: relative;
-        }
-        .camera-card { 
-            background: #1f2937; 
-            border: 1px solid #374151; 
-            border-radius: 6px; 
             overflow: hidden;
         }
-        .camera-feed {
-            background: #000;
-            aspect-ratio: 16/9;
+        .camera-feed video,
+        .camera-feed img.stream {
+            position: absolute;
+            inset: 0;
             width: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            position: relative;
+            height: 100%;
+            object-fit: cover;
+            display: block;
         }
-        .camera-feed {
-            background: #000;
-            height: 160px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-        }
-        .camera-feed .cam-icon { font-size: 48px; margin-bottom: 10px; opacity: 0.6; }
-        .camera-feed .cam-ip { color: #00e5ff; font-size: 12px; font-family: monospace; }
         .camera-feed .cam-live {
             position: absolute;
             top: 8px;
@@ -157,8 +140,24 @@
             padding: 2px 8px;
             border-radius: 4px;
             letter-spacing: 1px;
+            z-index: 10;
         }
-        .camera-info { padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; }
+        .cam-fallback {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            color: #6b7280;
+        }
+        .camera-info {
+            padding: 10px 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex: 0 0 auto;
+        }
         .camera-info h3 { font-size: 13px; color: #f9fafb; font-weight: 600; }
         .camera-info p { font-size: 11px; color: #6b7280; margin-top: 2px; }
 
@@ -232,11 +231,11 @@
 
         .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 100; align-items: center; justify-content: center; }
         .modal.active { display: flex; }
-        .modal-box { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 30px; width: 400px; }
+        .modal-box { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 30px; width: 420px; }
         .modal-box h3 { color: #00e5ff; margin-bottom: 20px; }
         .form-group { margin-bottom: 16px; }
         .form-group label { display: block; color: #9ca3af; font-size: 13px; margin-bottom: 6px; }
-        .form-group input {
+        .form-group input[type="text"] {
             width: 100%;
             padding: 10px 14px;
             background: #1f2937;
@@ -246,7 +245,19 @@
             font-size: 14px;
             outline: none;
         }
-        .form-group input:focus { border-color: #00e5ff; }
+        .form-group input[type="text"]:focus { border-color: #00e5ff; }
+        .cam-type-row { display: flex; gap: 16px; margin-top: 4px; }
+        .cam-type-row label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #d1d5db;
+            font-size: 13px;
+            text-transform: none;
+            letter-spacing: 0;
+            cursor: pointer;
+            margin-bottom: 0;
+        }
         .modal-btns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
         .toast {
             position: fixed;
@@ -265,7 +276,6 @@
     </style>
 </head>
 <body>
-
 
 <div class="navbar">
     <h1>🎥 CCTV MONITOR</h1>
@@ -308,21 +318,36 @@
         <div class="cameras-grid" id="cameras-grid">
             {% for camera in cameras %}
             <div class="camera-card" id="cam-{{ camera.id }}">
-                <div class="camera-feed">
+                <div class="camera-feed" id="feed-{{ camera.id }}">
                     <div class="cam-live">● REC</div>
-                    <div class="cam-icon">📷</div>
-                    <div class="cam-ip">{{ camera.ip_address }}</div>
+
+                    {% if camera.ip_address == '0.0.0.0' %}
+                        <video id="webcam-video-{{ camera.id }}" autoplay muted playsinline></video>
+                        <div class="cam-fallback" id="fallback-{{ camera.id }}" style="display:none; position:absolute; inset:0;">
+                            <div style="font-size:36px;">📷</div>
+                            <div style="font-size:11px; color:#374151; margin-top:6px;">Webcam unavailable</div>
+                        </div>
+                    {% else %}
+                        <img class="stream"
+                             src="/api/cameras/stream/rtsp?url={{ camera.rtsp_url }}"
+                             alt="Camera Feed"
+                             onerror="showFallback({{ camera.id }}, '{{ camera.ip_address }}')">
+                        <div class="cam-fallback" id="fallback-{{ camera.id }}" style="display:none; position:absolute; inset:0;">
+                            <div style="font-size:36px;">📷</div>
+                            <div style="font-size:11px; color:#374151; margin-top:6px;">{{ camera.ip_address }}</div>
+                        </div>
+                    {% endif %}
                 </div>
                 <div class="camera-info">
-    <div>
-        <h3>{{ camera.name }}</h3>
-        <p>{{ camera.location }}</p>
-    </div>
-    <div style="display:flex; gap:6px; align-items:center;">
-        <span class="badge badge-{{ camera.status }}">{{ camera.status|upper }}</span>
-        <button class="btn btn-danger" onclick="deleteCamera({{ camera.id }})">✕</button>
-    </div>
-</div>
+                    <div>
+                        <h3>{{ camera.name }}</h3>
+                        <p>{{ camera.location }}</p>
+                    </div>
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        <span class="badge badge-{{ camera.status }}">{{ camera.status|upper }}</span>
+                        <button class="btn btn-danger" onclick="deleteCamera({{ camera.id }})">✕</button>
+                    </div>
+                </div>
             </div>
             {% else %}
             <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:#374151;">
@@ -333,10 +358,9 @@
         </div>
     </div>
 
-    <!-- RIGHT: ALERTS + DEVICES stacked -->
+    <!-- RIGHT: ALERTS + DEVICES -->
     <div class="right-panel">
 
-        <!-- SECURITY ALERTS -->
         <div class="card">
             <div class="card-header">
                 <h2>⚠ SECURITY ALERTS</h2>
@@ -378,12 +402,11 @@
                     {% else %}
                     <tr><td colspan="4" style="color:#6b7280; text-align:center;">No alerts</td></tr>
                     {% endfor %}
-                </tbody>
+                    </tbody>
                 </table>
             </div>
         </div>
 
-        <!-- NETWORK DEVICES -->
         <div class="card">
             <div class="card-header">
                 <h2>🌐 NETWORK DEVICES</h2>
@@ -421,21 +444,42 @@
     </div>
 </div>
 
+<!-- ADD CAMERA MODAL -->
 <div class="modal" id="add-camera-modal">
     <div class="modal-box">
         <h3>📷 Add Camera</h3>
+
+        <div class="form-group">
+            <label>Camera Type</label>
+            <div class="cam-type-row">
+                <label>
+                    <input type="radio" name="cam-type" value="webcam" id="type-webcam"
+                           onchange="toggleCamType('webcam')" checked>
+                    🖥️ Webcam (this device)
+                </label>
+                <label>
+                    <input type="radio" name="cam-type" value="ip" id="type-ip"
+                           onchange="toggleCamType('ip')">
+                    🌐 IP Camera (RTSP)
+                </label>
+            </div>
+        </div>
+
         <div class="form-group">
             <label>Camera Name</label>
             <input type="text" id="cam-name" placeholder="e.g. Front Door">
         </div>
-        <div class="form-group">
+
+        <div class="form-group" id="ip-field" style="display:none;">
             <label>IP Address</label>
             <input type="text" id="cam-ip" placeholder="e.g. 192.168.1.100">
         </div>
+
         <div class="form-group">
             <label>Location</label>
             <input type="text" id="cam-location" placeholder="e.g. Entrance">
         </div>
+
         <div class="modal-btns">
             <button class="btn btn-danger" onclick="closeAddCamera()">Cancel</button>
             <button class="btn btn-primary" onclick="addCamera()">Add Camera</button>
@@ -447,8 +491,7 @@
 
 <script>
     function updateTime() {
-        const now = new Date();
-        document.getElementById('current-time').textContent = now.toLocaleString();
+        document.getElementById('current-time').textContent = new Date().toLocaleString();
     }
     setInterval(updateTime, 1000);
     updateTime();
@@ -460,23 +503,63 @@
         setTimeout(() => t.classList.remove('show'), 3000);
     }
 
-    function openAddCamera() { document.getElementById('add-camera-modal').classList.add('active'); }
-    function closeAddCamera() { document.getElementById('add-camera-modal').classList.remove('active'); }
+    let sharedWebcamStream = null;
+
+    async function initWebcams() {
+        const videos = document.querySelectorAll('video[id^="webcam-video-"]');
+        if (videos.length === 0) return;
+        try {
+            if (!sharedWebcamStream) {
+                sharedWebcamStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            }
+            videos.forEach(v => { v.srcObject = sharedWebcamStream; });
+        } catch (err) {
+            console.warn('Webcam access denied or unavailable:', err);
+            videos.forEach(v => {
+                const id = v.id.replace('webcam-video-', '');
+                v.style.display = 'none';
+                const fb = document.getElementById('fallback-' + id);
+                if (fb) fb.style.display = 'flex';
+            });
+        }
+    }
+
+    function showFallback(cameraId, ip) {
+        const feed = document.getElementById('feed-' + cameraId);
+        const img = feed ? feed.querySelector('img.stream') : null;
+        const fb = document.getElementById('fallback-' + cameraId);
+        if (img) img.style.display = 'none';
+        if (fb) fb.style.display = 'flex';
+    }
+
+    function openAddCamera() {
+        document.getElementById('type-webcam').checked = true;
+        toggleCamType('webcam');
+        document.getElementById('cam-name').value = '';
+        document.getElementById('cam-ip').value = '';
+        document.getElementById('cam-location').value = '';
+        document.getElementById('add-camera-modal').classList.add('active');
+    }
+    function closeAddCamera() {
+        document.getElementById('add-camera-modal').classList.remove('active');
+    }
+    function toggleCamType(type) {
+        document.getElementById('ip-field').style.display = type === 'webcam' ? 'none' : 'block';
+    }
 
     function addCamera() {
-        const name = document.getElementById('cam-name').value;
-        const ip = document.getElementById('cam-ip').value;
-        const location = document.getElementById('cam-location').value;
-        if (!name || !ip || !location) { showToast('Please fill all fields!'); return; }
-        
+        const name     = document.getElementById('cam-name').value.trim();
+        const location = document.getElementById('cam-location').value.trim();
+        const camType  = document.querySelector('input[name="cam-type"]:checked')?.value;
+        const ip       = camType === 'webcam' ? '0.0.0.0' : document.getElementById('cam-ip').value.trim();
+
+        if (!name || !location) { showToast('Please fill all fields!'); return; }
+        if (camType === 'ip' && !ip) { showToast('Please enter an IP address!'); return; }
+
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        
         fetch('/api/cameras/add', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
-            },
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ name, ip_address: ip, location })
         })
         .then(r => r.json())
@@ -485,25 +568,24 @@
                 showToast('Camera added!');
                 closeAddCamera();
                 setTimeout(() => window.location.reload(), 1000);
+            } else {
+                showToast(data.error || 'Failed to add camera');
             }
-        });
+        })
+        .catch(() => showToast('Error adding camera'));
     }
 
     function deleteCamera(id) {
         if (!confirm('Delete this camera?')) return;
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        
         fetch(`/api/cameras/delete/${id}`, {
             method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
-            }
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }
         })
         .then(r => r.json())
         .then(data => {
             if (data.success) {
-                document.getElementById(`cam-${id}`).remove();
+                document.getElementById(`cam-${id}`)?.remove();
                 const count = document.getElementById('camera-count');
                 count.textContent = parseInt(count.textContent) - 1;
                 showToast('Camera deleted!');
@@ -516,15 +598,9 @@
         showToast('Scanning network...');
         fetch('/api/network/scan', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
-            }
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }
         })
-        .then(response => {
-            if (!response.ok) throw new Error('Network scan failed');
-            return response.json();
-        })
+        .then(r => { if (!r.ok) throw new Error(); return r.json(); })
         .then(devices => {
             const tbody = document.getElementById('logs-table');
             tbody.innerHTML = '';
@@ -539,10 +615,7 @@
             document.getElementById('device-count').textContent = devices.length;
             showToast(`Found ${devices.length} devices!`);
         })
-        .catch(error => {
-            console.error('Error:', error);
-            showToast('Failed to scan network');
-        });
+        .catch(() => showToast('Failed to scan network'));
     }
 
     function simulateAttack() {
@@ -556,58 +629,38 @@
 
     function resolveAlert(id) {
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        
         fetch(`/api/alerts/resolve/${id}`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
-            }
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }
         })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Server responded with ' + response.status);
-            }
-            return response.json();
-        })
+        .then(r => { if (!r.ok) throw new Error('Status ' + r.status); return r.json(); })
         .then(data => {
             if (data.success) {
                 const row = document.getElementById(`alert-${id}`);
                 if (row) {
                     row.style.opacity = '0.4';
                     const lastCell = row.querySelector('td:last-child');
-                    if (lastCell) {
-                        lastCell.innerHTML = '<span style="color:#6b7280; font-size:11px;">Resolved</span>';
-                    }
+                    if (lastCell) lastCell.innerHTML = '<span style="color:#6b7280; font-size:11px;">Resolved</span>';
                 }
                 const count = document.getElementById('alert-count');
-                if (count) {
-                    count.textContent = parseInt(count.textContent) - 1;
-                }
+                if (count) count.textContent = parseInt(count.textContent) - 1;
                 showToast('Alert resolved!');
             } else {
-                showToast('Failed to resolve alert: ' + (data.error || 'Unknown error'));
+                showToast('Failed: ' + (data.error || 'Unknown error'));
             }
         })
-        .catch(error => {
-            console.error('Error:', error);
-            showToast('Error resolving alert');
-        });
+        .catch(() => showToast('Error resolving alert'));
     }
 
     function blockIPFromAlert(ip, alertType) {
         if (!confirm(`Block IP ${ip}?\nReason: ${alertType} attack detected`)) return;
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        
         fetch('/api/block-ip', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
-            },
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
             body: JSON.stringify({ ip, reason: `${alertType} attack detected` })
         })
-        .then(response => response.json())
+        .then(r => r.json())
         .then(data => {
             if (data.success) {
                 showToast(`🚫 IP ${ip} blocked!`);
@@ -615,11 +668,10 @@
                 showToast(`⚠ ${data.error}`);
             }
         })
-        .catch(error => {
-            console.error('Error:', error);
-            showToast('Failed to block IP');
-        });
+        .catch(() => showToast('Failed to block IP'));
     }
+
+    document.addEventListener('DOMContentLoaded', initWebcams);
 </script>
 
 </body>
