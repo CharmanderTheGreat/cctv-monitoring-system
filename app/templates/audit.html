@@ -221,7 +221,13 @@
                     {% for attempt in login_attempts %}
                     <tr>
                         <td>{{ attempt.ip_address }}</td>
-                        <td>{{ attempt.username }}</td>
+                        <td>
+                            {% if attempt.username == current_user.username %}
+                                <strong style="background: #00e5ff20; padding: 2px 10px; border-radius: 15px;">👤 YOU ({{ attempt.username }})</strong>
+                            {% else %}
+                                👤 {{ attempt.username }}
+                            {% endif %}
+                        </td>
                         <td>
                             {% if attempt.success %}
                             <span class="badge badge-success">SUCCESS</span>
@@ -266,7 +272,13 @@
                 <tbody>
                     {% for log in audit_logs %}
                     <tr>
-                        <td style="color:#00e5ff;">{{ log.user }}</td>
+                        <td style="color:#00e5ff;">
+                            {% if log.user == current_user.username %}
+                                <strong style="background: #00e5ff20; padding: 2px 10px; border-radius: 15px;">👤 YOU ({{ log.user }})</strong>
+                            {% else %}
+                                👤 {{ log.user }}
+                            {% endif %}
+                        </td>
                         <td>{{ log.action }}</td>
                         <td>{{ log.ip_address }}</td>
                         <td>{{ log.timestamp.strftime('%Y-%m-%d %I:%M:%S %p') }}</td>

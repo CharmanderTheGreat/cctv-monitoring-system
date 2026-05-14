@@ -84,6 +84,7 @@ def audit():
         audit_logs=audit_logs,
         honeypot_logs=honeypot_logs,
         login_attempts=login_attempts,
+        current_user=current_user,
     )
 
 
