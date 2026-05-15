@@ -31,7 +31,9 @@ class Config:
     MAIL_USE_TLS = True
     MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
     MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
-    ALERT_EMAIL = os.environ.get("ALERT_EMAIL")
+    ALERT_EMAIL = [
+        e.strip() for e in os.environ.get("ALERT_EMAILS", "").split(",") if e.strip()
+    ]
 
     # SMS
     TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")

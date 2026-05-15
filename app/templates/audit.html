@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CCTV Monitor — Audit Log</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body {
@@ -327,12 +328,13 @@
     }
 
     function blockIP(ip, reason) {
-        if (!confirm(`Block IP ${ip}?\nReason: ${reason}`)) return;
-        fetch('/api/block-ip', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ip, reason })
-        })
+    if (!confirm(`Block IP ${ip}?\nReason: ${reason}`)) return;
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    fetch('/api/block-ip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ ip, reason })
+    })
         .then(r => r.json())
         .then(data => {
             if (data.success) {
@@ -345,12 +347,13 @@
     }
 
     function unblockIP(ip) {
-        if (!confirm(`Unblock IP ${ip}?`)) return;
-        fetch('/api/unblock-ip', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ip })
-        })
+    if (!confirm(`Unblock IP ${ip}?`)) return;
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    fetch('/api/unblock-ip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify({ ip })
+    })
         .then(r => r.json())
         .then(data => {
             if (data.success) {

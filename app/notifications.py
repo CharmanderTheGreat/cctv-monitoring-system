@@ -12,7 +12,7 @@ def send_email_alert(app, subject, body):
             msg = Message(
                 subject=f"🚨 CCTV ALERT: {subject}",
                 sender=app.config["MAIL_USERNAME"],
-                recipients=[app.config["ALERT_EMAIL"]],
+                recipients=app.config["ALERT_EMAIL"],
                 body=body,
             )
             mail.send(msg)

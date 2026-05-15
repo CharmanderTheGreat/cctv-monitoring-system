@@ -50,6 +50,7 @@ def create_app():
 
     login_manager.login_view = "auth.login"
 
+    # TEMPORARILY COMMENTED OUT - FIX LATER
     from app.auth import auth as auth_blueprint
     from app.routes import main as main_blueprint
     from app.network_core import network_core as network_core_blueprint
