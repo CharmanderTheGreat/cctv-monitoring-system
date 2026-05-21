@@ -25,6 +25,7 @@ import bleach
 import ipaddress
 import os
 import cv2
+from app import db, limiter, csrf
 
 # Philippine timezone (UTC+8)
 PH_TZ = timezone("Asia/Manila")
@@ -229,10 +230,6 @@ def delete_camera(camera_id):
 @login_required
 @limiter.limit("10 per minute")
 def scan_network():
-    """
-    Hindi na mag-sscan ito — mag-re-refresh na lang ng pinakabagong
-    data mula sa database na ini-update ng local agent.
-    """
     logs = NetworkLog.query.order_by(NetworkLog.timestamp.desc()).all()
     devices = [
         {
@@ -250,11 +247,8 @@ def scan_network():
 
 @main.route("/api/network/update", methods=["POST"])
 @limiter.limit("10 per minute")
+@csrf.exempt
 def network_update():
-    """
-    Tinatawag ng local agent para i-update ang network devices.
-    Hindi kailangan ng login — gumagamit ng AGENT_KEY para sa auth.
-    """
     # I-verify ang agent key
     agent_key = request.headers.get("X-Agent-Key", "")
     if not AGENT_KEY or agent_key != AGENT_KEY:
