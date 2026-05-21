@@ -67,6 +67,11 @@ def log_attempt(ip, username, success):
                     blocked_until=datetime.utcnow() + timedelta(minutes=15),
                 )
                 db.session.add(blocked)
+            else:
+                existing_block.blocked_until = max(
+                    existing_block.blocked_until,
+                    datetime.utcnow() + timedelta(minutes=15),
+                )
 
             alert = SecurityAlert(
                 alert_type="brute_force",
@@ -147,17 +152,8 @@ def login():
                 flash(f"Invalid credentials. {remaining} attempts remaining.", "danger")
                 return redirect(url_for("auth.login"))
 
-    # GET request (page refresh)
     if is_ip_temp_banned(ip):
-        blocked = TempBlockedIP.query.filter_by(ip_address=ip).first()
-        if blocked:
-            remaining_seconds = int(
-                (blocked.blocked_until - datetime.utcnow()).total_seconds()
-            )
-            remaining_seconds = max(0, remaining_seconds)
-        else:
-            remaining_seconds = 0
-        flash("Too many failed attempts. Access blocked.", "danger")
+        remaining_seconds = get_ip_ban_seconds(ip)
         return render_template("login.html", ban_seconds=remaining_seconds)
 
     return render_template("login.html")

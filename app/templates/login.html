@@ -223,29 +223,30 @@
 
         <div class="login-box">
 
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% set displayed = [] %}
-                {% for category, message in messages %}
-                    {% if message not in displayed %}
-                        {% set _ = displayed.append(message) %}
-                        {% if 'Too many failed attempts' in message or 'blocked' in message.lower() %}
-                            <div class="alert">⛔ Too many failed attempts</div>
-                            <div class="countdown-box">
-                                <div class="lock-icon">🔒</div>
-                                <div class="timer-label">Access blocked — try again in</div>
-                                <div class="timer" id="countdown">--:--</div>
-                                <div class="timer-label" id="timer-msg">Please wait...</div>
-                            </div>
-                        {% else %}
+            {% if ban_seconds and ban_seconds > 0 %}
+                <!-- Blocked — ipakita lang yung countdown, walang flash -->
+                <div class="alert">⛔ Too many failed attempts</div>
+                <div class="countdown-box">
+                    <div class="lock-icon">🔒</div>
+                    <div class="timer-label">ACCESS BLOCKED — TRY AGAIN IN</div>
+                    <div class="timer" id="countdown">--:--</div>
+                    <div class="timer-label" id="timer-msg">Please wait...</div>
+                </div>
+            {% else %}
+                <!-- Normal flash messages (wrong password, access denied, etc.) -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% set displayed = [] %}
+                    {% for category, message in messages %}
+                        {% if message not in displayed %}
+                            {% set _ = displayed.append(message) %}
                             <div class="alert">⚠ {{ message }}</div>
                         {% endif %}
-                    {% endif %}
-                {% endfor %}
-            {% endwith %}
+                    {% endfor %}
+                {% endwith %}
+            {% endif %}
 
             <div class="divider">
-                <hr><span>SECURE LOGIN</span>
-                <hr>
+                <hr><span>SECURE LOGIN</span><hr>
             </div>
 
             <form method="POST">
@@ -254,17 +255,26 @@
                     <label>Username</label>
                     <div class="input-wrapper">
                         <span class="input-icon">👤</span>
-                        <input type="text" name="username" id="username" placeholder="Enter your username" required>
+                        <input type="text" name="username" id="username"
+                               placeholder="Enter your username"
+                               {% if ban_seconds and ban_seconds > 0 %}disabled{% endif %}
+                               required>
                     </div>
                 </div>
                 <div class="form-group">
                     <label>Password</label>
                     <div class="input-wrapper">
                         <span class="input-icon">🔑</span>
-                        <input type="password" name="password" id="password" placeholder="Enter your password" required>
+                        <input type="password" name="password" id="password"
+                               placeholder="Enter your password"
+                               {% if ban_seconds and ban_seconds > 0 %}disabled{% endif %}
+                               required>
                     </div>
                 </div>
-                <button type="submit" class="btn" id="login-btn">Login</button>
+                <button type="submit" class="btn" id="login-btn"
+                        {% if ban_seconds and ban_seconds > 0 %}disabled{% endif %}>
+                    Login
+                </button>
             </form>
         </div>
 
@@ -273,69 +283,45 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Kunin ang ban_seconds mula sa server (galing sa database)
-            let secs = {{ ban_seconds|default(0) }};
-            
-            // Kung may ban (secs > 0), i-disable ang lahat ng input fields
+        document.addEventListener('DOMContentLoaded', function () {
+            let secs = {{ ban_seconds | default(0) }};
+
             if (secs > 0) {
-                const usernameInput = document.getElementById('username');
-                const passwordInput = document.getElementById('password');
-                const loginBtn = document.getElementById('login-btn');
                 const timerEl = document.getElementById('countdown');
-                
-                // I-disable ang lahat ng fields
-                if (usernameInput) {
-                    usernameInput.disabled = true;
-                }
-                if (passwordInput) {
-                    passwordInput.disabled = true;
-                }
-                if (loginBtn) {
-                    loginBtn.disabled = true;
-                }
-                
-                // Format ng timer
+
                 function formatTime(seconds) {
                     const m = Math.floor(seconds / 60);
                     const s = seconds % 60;
                     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
                 }
-                
+
                 function updateTimer() {
-                    if (timerEl) {
-                        timerEl.textContent = formatTime(secs);
-                    }
+                    if (timerEl) timerEl.textContent = formatTime(secs);
                 }
-                
+
                 updateTimer();
-                
-                // Countdown interval
+
                 const interval = setInterval(() => {
                     if (secs > 0) {
                         secs--;
                         updateTimer();
                     }
-                    
+
                     if (secs <= 0) {
                         clearInterval(interval);
                         if (timerEl) {
                             timerEl.textContent = '00:00';
                             timerEl.style.color = '#86efac';
                         }
-                        // I-enable ang fields pag tapos na ang ban
-                        if (usernameInput) {
-                            usernameInput.disabled = false;
-                        }
-                        if (passwordInput) {
-                            passwordInput.disabled = false;
-                        }
-                        if (loginBtn) {
-                            loginBtn.disabled = false;
-                        }
                         const msgEl = document.getElementById('timer-msg');
                         if (msgEl) msgEl.textContent = '✅ You can try again now!';
-                        // Auto-reload para ma-refresh ang page at mawala ang block message
+
+                        // I-enable ang fields
+                        document.getElementById('username').disabled = false;
+                        document.getElementById('password').disabled = false;
+                        document.getElementById('login-btn').disabled = false;
+
+                        // Auto-reload
                         setTimeout(() => window.location.reload(), 1000);
                     }
                 }, 1000);

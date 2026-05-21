@@ -7,7 +7,7 @@ from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect, generate_csrf
 from flask_talisman import Talisman
 from flask_mail import Mail
-from config import Config
+import os
 
 db = SQLAlchemy()
 login_manager = LoginManager()
@@ -19,7 +19,7 @@ mail = Mail()
 
 def create_app():
     app = Flask(__name__)
-    app.config.from_object(Config)
+    app.config.from_object("config.Config")
 
     db.init_app(app)
     login_manager.init_app(app)
@@ -32,6 +32,8 @@ def create_app():
     def inject_csrf():
         return dict(csrf_token=generate_csrf)
 
+    is_production = os.environ.get("RAILWAY_ENVIRONMENT") == "production"
+
     csp = {
         "default-src": "'self'",
         "script-src": "'self' 'unsafe-inline'",
@@ -40,8 +42,8 @@ def create_app():
     }
     Talisman(
         app,
-        force_https=False,
-        strict_transport_security=False,
+        force_https=is_production,
+        strict_transport_security=is_production,
         content_security_policy=csp,
         x_content_type_options=True,
         frame_options="DENY",
@@ -50,7 +52,6 @@ def create_app():
 
     login_manager.login_view = "auth.login"
 
-    # TEMPORARILY COMMENTED OUT - FIX LATER
     from app.auth import auth as auth_blueprint
     from app.routes import main as main_blueprint
     from app.network_core import network_core as network_core_blueprint
@@ -59,13 +60,11 @@ def create_app():
     app.register_blueprint(main_blueprint)
     app.register_blueprint(network_core_blueprint)
 
-    # Auto-create any missing tables (e.g. temp_blocked_ips) on startup
     with app.app_context():
-        from app import models  # ensure all models are registered
+        from app import models
 
         db.create_all()
 
-    # Register error handlers
     register_error_handlers(app)
 
     return app

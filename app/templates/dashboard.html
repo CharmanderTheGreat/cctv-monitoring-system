@@ -57,7 +57,6 @@
             overflow: hidden;
         }
 
-        /* LEFT — CAMERAS */
         .cameras-section {
             background: #111827;
             border: 1px solid #1f2937;
@@ -91,10 +90,7 @@
             grid-template-columns: repeat(2, 1fr);
             grid-template-rows: 1fr;
         }
-        .cameras-grid:has(> :nth-child(3):last-child) {
-            grid-template-columns: repeat(2, 1fr);
-            grid-template-rows: repeat(2, 1fr);
-        }
+        .cameras-grid:has(> :nth-child(3):last-child),
         .cameras-grid:has(> :nth-child(4):last-child) {
             grid-template-columns: repeat(2, 1fr);
             grid-template-rows: repeat(2, 1fr);
@@ -161,7 +157,6 @@
         .camera-info h3 { font-size: 13px; color: #f9fafb; font-weight: 600; }
         .camera-info p { font-size: 11px; color: #6b7280; margin-top: 2px; }
 
-        /* RIGHT — stacked alerts + devices */
         .right-panel {
             display: flex;
             flex-direction: column;
@@ -188,6 +183,13 @@
             flex: 0 0 auto;
         }
         .card-header h2 { color: #00e5ff; font-size: 13px; letter-spacing: 1px; }
+        .card-subtext {
+            font-size: 10px;
+            color: #4b5563;
+            padding: 4px 14px;
+            flex: 0 0 auto;
+            font-style: italic;
+        }
         .table-scroll {
             overflow-y: auto;
             flex: 1 1 0;
@@ -320,7 +322,6 @@
             <div class="camera-card" id="cam-{{ camera.id }}">
                 <div class="camera-feed" id="feed-{{ camera.id }}">
                     <div class="cam-live">● REC</div>
-
                     {% if camera.ip_address == '0.0.0.0' %}
                         <video id="webcam-video-{{ camera.id }}" autoplay muted playsinline></video>
                         <div class="cam-fallback" id="fallback-{{ camera.id }}" style="display:none; position:absolute; inset:0;">
@@ -364,7 +365,7 @@
         <div class="card">
             <div class="card-header">
                 <h2>⚠ SECURITY ALERTS</h2>
-                <button class="btn btn-warning" onclick="simulateAttack()">Simulate Attack</button>
+                <button class="btn btn-warning" onclick="simulateAttack()" style="display:none;">Simulate Attack</button>
             </div>
             <div class="table-scroll">
                 <table>
@@ -410,7 +411,10 @@
         <div class="card">
             <div class="card-header">
                 <h2>🌐 NETWORK DEVICES</h2>
-                <button class="btn btn-primary" onclick="scanNetwork()">Scan Network</button>
+                <button class="btn btn-primary" id="scan-btn" onclick="refreshDevices()">↻ Refresh</button>
+            </div>
+            <div class="card-subtext" id="agent-status">
+                Updated by local agent every 5 mins
             </div>
             <div class="table-scroll">
                 <table>
@@ -422,7 +426,7 @@
                     <thead>
                         <tr>
                             <th>IP Address</th>
-                            <th>Hostname</th>
+                            <th>Device</th>
                             <th>Status</th>
                         </tr>
                     </thead>
@@ -434,7 +438,11 @@
                             <td><span class="badge badge-active">ACTIVE</span></td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="3" style="color:#6b7280; text-align:center;">No devices — click Scan Network</td></tr>
+                        <tr>
+                            <td colspan="3" style="color:#6b7280; text-align:center;">
+                                No devices — run agent.py on your local PC
+                            </td>
+                        </tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -448,7 +456,6 @@
 <div class="modal" id="add-camera-modal">
     <div class="modal-box">
         <h3>📷 Add Camera</h3>
-
         <div class="form-group">
             <label>Camera Type</label>
             <div class="cam-type-row">
@@ -464,22 +471,18 @@
                 </label>
             </div>
         </div>
-
         <div class="form-group">
             <label>Camera Name</label>
             <input type="text" id="cam-name" placeholder="e.g. Front Door">
         </div>
-
         <div class="form-group" id="ip-field" style="display:none;">
             <label>IP Address</label>
             <input type="text" id="cam-ip" placeholder="e.g. 192.168.1.100">
         </div>
-
         <div class="form-group">
             <label>Location</label>
             <input type="text" id="cam-location" placeholder="e.g. Entrance">
         </div>
-
         <div class="modal-btns">
             <button class="btn btn-danger" onclick="closeAddCamera()">Cancel</button>
             <button class="btn btn-primary" onclick="addCamera()">Add Camera</button>
@@ -503,6 +506,7 @@
         setTimeout(() => t.classList.remove('show'), 3000);
     }
 
+    // ─── Webcam ───────────────────────────────────────────────
     let sharedWebcamStream = null;
 
     async function initWebcams() {
@@ -514,7 +518,7 @@
             }
             videos.forEach(v => { v.srcObject = sharedWebcamStream; });
         } catch (err) {
-            console.warn('Webcam access denied or unavailable:', err);
+            console.warn('Webcam access denied:', err);
             videos.forEach(v => {
                 const id = v.id.replace('webcam-video-', '');
                 v.style.display = 'none';
@@ -524,7 +528,7 @@
         }
     }
 
-    function showFallback(cameraId, ip) {
+    function showFallback(cameraId) {
         const feed = document.getElementById('feed-' + cameraId);
         const img = feed ? feed.querySelector('img.stream') : null;
         const fb = document.getElementById('fallback-' + cameraId);
@@ -532,6 +536,7 @@
         if (fb) fb.style.display = 'flex';
     }
 
+    // ─── Modal ───────────────────────────────────────────────
     function openAddCamera() {
         document.getElementById('type-webcam').checked = true;
         toggleCamType('webcam');
@@ -547,6 +552,7 @@
         document.getElementById('ip-field').style.display = type === 'webcam' ? 'none' : 'block';
     }
 
+    // ─── Add Camera ──────────────────────────────────────────
     function addCamera() {
         const name     = document.getElementById('cam-name').value.trim();
         const location = document.getElementById('cam-location').value.trim();
@@ -575,6 +581,7 @@
         .catch(() => showToast('Error adding camera'));
     }
 
+    // ─── Delete Camera ───────────────────────────────────────
     function deleteCamera(id) {
         if (!confirm('Delete this camera?')) return;
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
@@ -593,31 +600,47 @@
         });
     }
 
-    function scanNetwork() {
+    // ─── Refresh Devices (from DB) ────────────────────────────
+    function refreshDevices() {
+        const btn = document.getElementById('scan-btn');
+        btn.disabled = true;
+        btn.textContent = 'Loading...';
+
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-        showToast('Scanning network...');
         fetch('/api/network/scan', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({})
         })
-        .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+        .then(r => r.json())
         .then(devices => {
             const tbody = document.getElementById('logs-table');
             tbody.innerHTML = '';
-            devices.forEach(d => {
-                tbody.innerHTML += `
-                    <tr>
-                        <td>${d.ip}</td>
-                        <td>${d.hostname}</td>
-                        <td><span class="badge badge-active">ACTIVE</span></td>
-                    </tr>`;
-            });
+            if (devices.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="color:#6b7280; text-align:center;">No devices — run agent.py on your local PC</td></tr>';
+            } else {
+                devices.forEach(d => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${d.ip}</td>
+                            <td>${d.hostname}</td>
+                            <td><span class="badge badge-active">ACTIVE</span></td>
+                        </tr>`;
+                });
+            }
             document.getElementById('device-count').textContent = devices.length;
-            showToast(`Found ${devices.length} devices!`);
+            document.getElementById('agent-status').textContent =
+                `Last refreshed: ${new Date().toLocaleTimeString()} — ${devices.length} device(s)`;
+            showToast(`${devices.length} device(s) loaded!`);
         })
-        .catch(() => showToast('Failed to scan network'));
+        .catch(() => showToast('Failed to load devices'))
+        .finally(() => {
+            btn.disabled = false;
+            btn.textContent = '↻ Refresh';
+        });
     }
 
+    // ─── Simulate Attack (hidden) ─────────────────────────────
     function simulateAttack() {
         fetch('/api/alerts/simulate')
         .then(r => r.json())
@@ -627,13 +650,14 @@
         });
     }
 
+    // ─── Resolve Alert ───────────────────────────────────────
     function resolveAlert(id) {
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         fetch(`/api/alerts/resolve/${id}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken }
         })
-        .then(r => { if (!r.ok) throw new Error('Status ' + r.status); return r.json(); })
+        .then(r => { if (!r.ok) throw new Error(); return r.json(); })
         .then(data => {
             if (data.success) {
                 const row = document.getElementById(`alert-${id}`);
@@ -645,13 +669,12 @@
                 const count = document.getElementById('alert-count');
                 if (count) count.textContent = parseInt(count.textContent) - 1;
                 showToast('Alert resolved!');
-            } else {
-                showToast('Failed: ' + (data.error || 'Unknown error'));
             }
         })
         .catch(() => showToast('Error resolving alert'));
     }
 
+    // ─── Block IP from Alert ──────────────────────────────────
     function blockIPFromAlert(ip, alertType) {
         if (!confirm(`Block IP ${ip}?\nReason: ${alertType} attack detected`)) return;
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');

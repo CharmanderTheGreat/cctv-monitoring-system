@@ -1,11 +1,14 @@
 import os
 from dotenv import load_dotenv
+from datetime import timedelta
 
 load_dotenv()
 
 
 class Config:
-    SECRET_KEY = os.environ.get("SECRET_KEY")
+    # Generate strong key: python -c "import secrets; print(secrets.token_hex(32))"
+    SECRET_KEY = os.environ.get("SECRET_KEY", "change-me-use-a-random-secret-key")
+
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL", "").replace(
         "postgres://", "postgresql://"
     )
@@ -15,7 +18,7 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
     SESSION_COOKIE_SECURE = os.environ.get("RAILWAY_ENVIRONMENT") == "production"
-    PERMANENT_SESSION_LIFETIME = 900
+    PERMANENT_SESSION_LIFETIME = timedelta(minutes=15)
 
     # CSRF
     WTF_CSRF_ENABLED = True
@@ -31,17 +34,15 @@ class Config:
     MAIL_USE_TLS = True
     MAIL_USERNAME = os.environ.get("MAIL_USERNAME")
     MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD")
+    # Support multiple emails separated by comma
     ALERT_EMAIL = [
         e.strip() for e in os.environ.get("ALERT_EMAILS", "").split(",") if e.strip()
     ]
 
-    # SMS
-    TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
-    TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
-    TWILIO_PHONE = os.environ.get("TWILIO_PHONE")
-    ALERT_PHONE = os.environ.get("ALERT_PHONE")
+    # SMS (Semaphore)
     SEMAPHORE_API_KEY = os.environ.get("SEMAPHORE_API_KEY")
     SEMAPHORE_SENDER = os.environ.get("SEMAPHORE_SENDER")
+    ALERT_PHONE = os.environ.get("ALERT_PHONE")
 
     # Database (for Railway)
     SQLALCHEMY_ENGINE_OPTIONS = {
@@ -49,5 +50,5 @@ class Config:
         "pool_recycle": 3600,
     }
 
-    # Rate limiting - DISABLE DEFAULT LIMITS
+    # Rate limiting
     RATELIMIT_DEFAULT = None

@@ -23,11 +23,14 @@ from pytz import timezone
 import random
 import bleach
 import ipaddress
-import re
+import os
 import cv2
 
 # Philippine timezone (UTC+8)
 PH_TZ = timezone("Asia/Manila")
+
+# Agent secret key — dapat same sa .env mo at sa agent.py
+AGENT_KEY = os.environ.get("AGENT_KEY", "")
 
 
 def validate_ip_address(ip):
@@ -49,7 +52,6 @@ def log_action(action):
 
 
 def convert_to_ph_time(dt):
-    """Convert UTC datetime to Philippine time"""
     if dt is None:
         return None
     return dt.astimezone(PH_TZ)
@@ -59,14 +61,9 @@ def convert_to_ph_time(dt):
 
 
 def generate_frames(source):
-    """
-    Generator function that yields MJPEG frames from a camera source.
-    source: int (device index, e.g. 0 for webcam) or str (RTSP URL)
-    """
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
         return
-
     try:
         while True:
             success, frame = cap.read()
@@ -86,7 +83,6 @@ def generate_frames(source):
 @main.route("/api/cameras/stream/webcam")
 @login_required
 def stream_webcam():
-    """Stream the server device's default webcam (index 0) as MJPEG."""
     return Response(
         stream_with_context(generate_frames(0)),
         mimetype="multipart/x-mixed-replace; boundary=frame",
@@ -96,15 +92,9 @@ def stream_webcam():
 @main.route("/api/cameras/stream/rtsp")
 @login_required
 def stream_rtsp():
-    """
-    Stream an IP camera via its RTSP URL as MJPEG.
-    Pass the RTSP URL as a query param: /api/cameras/stream/rtsp?url=rtsp://...
-    """
     rtsp_url = request.args.get("url", "")
-
     if not rtsp_url.startswith("rtsp://"):
-        return jsonify({"error": "Invalid RTSP URL. Must start with rtsp://"}), 400
-
+        return jsonify({"error": "Invalid RTSP URL"}), 400
     return Response(
         stream_with_context(generate_frames(rtsp_url)),
         mimetype="multipart/x-mixed-replace; boundary=frame",
@@ -138,7 +128,6 @@ def audit():
     honeypot_logs = HoneypotLog.query.order_by(HoneypotLog.timestamp.desc()).all()
     login_attempts = LoginAttempt.query.order_by(LoginAttempt.timestamp.desc()).all()
 
-    # Convert to Philippine time
     for log in audit_logs:
         log.timestamp = convert_to_ph_time(log.timestamp)
     for log in honeypot_logs:
@@ -196,7 +185,6 @@ def add_camera():
     if len(name) > 100 or len(ip_address) > 50 or len(location) > 100:
         return jsonify({"success": False, "error": "Input too long"}), 400
 
-    # Allow '0.0.0.0' as the special webcam identifier; validate all others
     if ip_address != "0.0.0.0" and not validate_ip_address(ip_address):
         return jsonify({"success": False, "error": "Invalid IP address format"}), 400
 
@@ -206,11 +194,9 @@ def add_camera():
             {"success": False, "error": "Camera with this IP already exists"}
         ), 400
 
-    # Webcam uses a special rtsp_url value; IP cameras build the standard URL
-    if ip_address == "0.0.0.0":
-        rtsp_url = "webcam"
-    else:
-        rtsp_url = f"rtsp://{ip_address}:554/stream"
+    rtsp_url = (
+        "webcam" if ip_address == "0.0.0.0" else f"rtsp://{ip_address}:554/stream"
+    )
 
     camera = Camera(
         name=name,
@@ -236,62 +222,80 @@ def delete_camera(camera_id):
     return jsonify({"success": True})
 
 
-# ─── Network ──────────────────────────────────────────────────────────────────
+# ─── Network Scan — refresh lang ng data mula sa DB ──────────────────────────
 
 
 @main.route("/api/network/scan", methods=["POST"])
 @login_required
-@limiter.limit("3 per minute")
+@limiter.limit("10 per minute")
 def scan_network():
+    """
+    Hindi na mag-sscan ito — mag-re-refresh na lang ng pinakabagong
+    data mula sa database na ini-update ng local agent.
+    """
+    logs = NetworkLog.query.order_by(NetworkLog.timestamp.desc()).all()
+    devices = [
+        {
+            "ip": l.ip_address,
+            "hostname": l.hostname,
+            "status": l.status,
+        }
+        for l in logs
+    ]
+    return jsonify(devices)
+
+
+# ─── Network Update — para sa local agent ────────────────────────────────────
+
+
+@main.route("/api/network/update", methods=["POST"])
+@limiter.limit("10 per minute")
+def network_update():
+    """
+    Tinatawag ng local agent para i-update ang network devices.
+    Hindi kailangan ng login — gumagamit ng AGENT_KEY para sa auth.
+    """
+    # I-verify ang agent key
+    agent_key = request.headers.get("X-Agent-Key", "")
+    if not AGENT_KEY or agent_key != AGENT_KEY:
+        return jsonify({"success": False, "error": "Unauthorized"}), 401
+
+    data = request.get_json() or {}
+    devices = data.get("devices", [])
+
+    if not devices:
+        return jsonify({"success": False, "error": "No devices provided"}), 400
+
+    # I-clear muna yung dati
     NetworkLog.query.delete()
     db.session.commit()
 
-    base_devices = [
-        {
-            "ip": "192.168.1.1",
-            "mac": "AA:BB:CC:DD:EE:01",
-            "hostname": "Router",
-            "status": "active",
-        },
-        {
-            "ip": "192.168.1.2",
-            "mac": "AA:BB:CC:DD:EE:02",
-            "hostname": "Switch",
-            "status": "active",
-        },
-        {
-            "ip": "192.168.1.10",
-            "mac": "AA:BB:CC:DD:EE:10",
-            "hostname": "PC-Admin",
-            "status": "active",
-        },
-    ]
+    saved = []
+    for device in devices:
+        ip = bleach.clean(str(device.get("ip", "")))
+        hostname = bleach.clean(str(device.get("hostname", "Unknown")))
+        mac = bleach.clean(str(device.get("mac", "N/A")))
+        status = bleach.clean(str(device.get("status", "active")))
 
-    cameras = Camera.query.all()
-    for cam in cameras:
-        if cam.ip_address == "0.0.0.0":
-            continue  # skip webcam entries from network scan
-        base_devices.append(
-            {
-                "ip": cam.ip_address,
-                "mac": "CC:TV:"
-                + ":".join(["{:02x}".format(cam.id * i % 256) for i in range(1, 5)]),
-                "hostname": cam.name,
-                "status": cam.status,
-            }
-        )
+        if not validate_ip_address(ip):
+            continue
 
-    for device in base_devices:
+        # Limit lengths
+        hostname = hostname[:100]
+        mac = mac[:50]
+
         log = NetworkLog(
-            ip_address=device["ip"],
-            mac_address=device["mac"],
-            hostname=device["hostname"],
-            status=device["status"],
+            ip_address=ip,
+            mac_address=mac,
+            hostname=hostname,
+            status=status,
         )
         db.session.add(log)
+        saved.append({"ip": ip, "hostname": hostname, "status": status})
+
     db.session.commit()
-    log_action("Scanned network")
-    return jsonify(base_devices)
+    print(f"[Agent] Updated {len(saved)} network devices")
+    return jsonify({"success": True, "saved": len(saved)})
 
 
 # ─── Alerts ───────────────────────────────────────────────────────────────────
@@ -352,12 +356,10 @@ def simulate_alert():
     db.session.add(alert)
     db.session.commit()
     log_action(f"Simulated attack: {attack['type']}")
-
     send_alert(
         subject=attack["type"].upper().replace("_", " "),
         body=f"{attack['desc']}\nSource IP: {source_ip}\nSeverity: {attack['severity'].upper()}",
     )
-
     return jsonify({"success": True, "alert": attack["type"]})
 
 
