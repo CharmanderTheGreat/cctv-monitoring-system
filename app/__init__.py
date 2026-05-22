@@ -14,9 +14,8 @@ login_manager = LoginManager()
 bcrypt = Bcrypt()
 limiter = Limiter(
     key_func=get_remote_address,
-    storage_uri=os.environ.get("DATABASE_URL", "memory://")
-    .replace("postgres://", "postgresql+psycopg2://")
-    .replace("postgresql://", "postgresql+psycopg2://"),
+    storage_uri=os.environ.get("REDIS_URL", "memory://"),
+    default_limits=["100 per hour", "20 per minute"],
 )
 csrf = CSRFProtect()
 mail = Mail()
