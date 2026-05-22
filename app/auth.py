@@ -96,18 +96,18 @@ def log_attempt(ip, username, success):
 
 @auth.route("/", methods=["GET", "POST"])
 @auth.route("/login", methods=["GET", "POST"])
+@limiter.limit("20 per minute")
+@limiter.limit("50 per hour")
 def login():
     if current_user.is_authenticated:
         return redirect(url_for("main.dashboard"))
 
     ip = get_client_ip()
 
-    # Check permanent block
     if is_ip_blocked(ip):
         flash("Access denied. Contact administrator.", "danger")
         return render_template("login.html")
 
-    # POST request (form submission)
     if request.method == "POST":
         if is_ip_temp_banned(ip):
             secs = get_ip_ban_seconds(ip)

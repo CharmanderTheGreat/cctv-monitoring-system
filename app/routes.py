@@ -20,6 +20,7 @@ from app.models import (
 from app import db, limiter, csrf
 from datetime import datetime, timedelta
 from pytz import timezone
+from urllib.parse import urlparse
 import bleach
 import ipaddress
 import os
@@ -35,6 +36,22 @@ def validate_ip_address(ip):
         return True
     except ValueError:
         return False
+
+
+def validate_rtsp_url(url):
+    try:
+        parsed = urlparse(url)
+        return parsed.scheme == "rtsp" and bool(parsed.netloc)
+    except Exception:
+        return False
+
+
+def cleanup_old_records():
+    cutoff = datetime.utcnow() - timedelta(days=30)
+    LoginAttempt.query.filter(LoginAttempt.timestamp < cutoff).delete()
+    AuditLog.query.filter(AuditLog.timestamp < cutoff).delete()
+    HoneypotLog.query.filter(HoneypotLog.timestamp < cutoff).delete()
+    db.session.commit()
 
 
 main = Blueprint("main", __name__)
@@ -89,7 +106,7 @@ def stream_webcam():
 @login_required
 def stream_rtsp():
     rtsp_url = request.args.get("url", "")
-    if not rtsp_url.startswith("rtsp://"):
+    if not validate_rtsp_url(rtsp_url):
         return jsonify({"error": "Invalid RTSP URL"}), 400
     return Response(
         stream_with_context(generate_frames(rtsp_url)),
@@ -277,6 +294,7 @@ def network_update():
         saved.append({"ip": ip, "hostname": hostname, "status": status})
 
     db.session.commit()
+    cleanup_old_records()
     print(f"[Agent] Updated {len(saved)} network devices")
     return jsonify({"success": True, "saved": len(saved)})
 
