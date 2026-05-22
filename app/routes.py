@@ -17,20 +17,15 @@ from app.models import (
     LoginAttempt,
     BlockedIP,
 )
-from app import db, limiter
+from app import db, limiter, csrf
 from datetime import datetime, timedelta
 from pytz import timezone
-import random
 import bleach
 import ipaddress
 import os
 import cv2
-from app import db, limiter, csrf
 
-# Philippine timezone (UTC+8)
 PH_TZ = timezone("Asia/Manila")
-
-# Agent secret key — dapat same sa .env mo at sa agent.py
 AGENT_KEY = os.environ.get("AGENT_KEY", "")
 
 
@@ -223,7 +218,7 @@ def delete_camera(camera_id):
     return jsonify({"success": True})
 
 
-# ─── Network Scan — refresh lang ng data mula sa DB ──────────────────────────
+# ─── Network Scan ─────────────────────────────────────────────────────────────
 
 
 @main.route("/api/network/scan", methods=["POST"])
@@ -242,14 +237,10 @@ def scan_network():
     return jsonify(devices)
 
 
-# ─── Network Update — para sa local agent ────────────────────────────────────
-
-
 @main.route("/api/network/update", methods=["POST"])
 @limiter.limit("10 per minute")
 @csrf.exempt
 def network_update():
-    # I-verify ang agent key
     agent_key = request.headers.get("X-Agent-Key", "")
     if not AGENT_KEY or agent_key != AGENT_KEY:
         return jsonify({"success": False, "error": "Unauthorized"}), 401
@@ -260,7 +251,6 @@ def network_update():
     if not devices:
         return jsonify({"success": False, "error": "No devices provided"}), 400
 
-    # I-clear muna yung dati
     NetworkLog.query.delete()
     db.session.commit()
 
@@ -274,7 +264,6 @@ def network_update():
         if not validate_ip_address(ip):
             continue
 
-        # Limit lengths
         hostname = hostname[:100]
         mac = mac[:50]
 
