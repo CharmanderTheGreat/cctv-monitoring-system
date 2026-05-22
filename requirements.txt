@@ -25,7 +25,6 @@ gunicorn==26.0.0
 idna==3.13
 itsdangerous==2.2.0
 Jinja2==3.1.6
-limits==5.8.0
 MarkupSafe==3.0.3
 multidict==6.7.1
 numpy==2.4.4
@@ -50,4 +49,3 @@ wrapt==2.1.2
 WTForms==3.2.2
 yarl==1.23.0
 sib-api-v3-sdk
-limits[postgresql]
