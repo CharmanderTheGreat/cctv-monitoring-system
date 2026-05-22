@@ -14,9 +14,9 @@ login_manager = LoginManager()
 bcrypt = Bcrypt()
 limiter = Limiter(
     key_func=get_remote_address,
-    storage_uri=os.environ.get("DATABASE_URL", "memory://").replace(
-        "postgres://", "postgresql://"
-    ),
+    storage_uri=os.environ.get("DATABASE_URL", "memory://")
+    .replace("postgres://", "postgresql+psycopg2://")
+    .replace("postgresql://", "postgresql+psycopg2://"),
 )
 csrf = CSRFProtect()
 mail = Mail()
