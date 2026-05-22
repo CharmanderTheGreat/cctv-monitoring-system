@@ -1,5 +1,4 @@
 from flask import current_app
-from flask_mail import Message
 import threading
 import traceback
 import requests
@@ -9,10 +8,15 @@ def send_email_alert(app, subject, body):
     def send():
         with app.app_context():
             try:
-                from app import mail
-
+                api_key = app.config.get("BREVO_API_KEY")
                 recipients = app.config.get("ALERT_EMAIL", [])
-                print(f"📧 Sending email to: {recipients}")
+                sender_email = app.config.get("MAIL_USERNAME")
+
+                print(f"📧 Sending email via Brevo to: {recipients}")
+
+                if not api_key:
+                    print("❌ BREVO_API_KEY not set in environment variables!")
+                    return
 
                 if not recipients:
                     print(
@@ -20,14 +24,36 @@ def send_email_alert(app, subject, body):
                     )
                     return
 
-                msg = Message(
-                    subject=f"🚨 CCTV ALERT: {subject}",
-                    sender=app.config["MAIL_USERNAME"],
-                    recipients=recipients,
-                    body=body,
+                if not sender_email:
+                    print("❌ MAIL_USERNAME not set!")
+                    return
+
+                # Build recipients list for Brevo API
+                to_list = [{"email": email} for email in recipients]
+
+                payload = {
+                    "sender": {"name": "CCTV Monitor", "email": sender_email},
+                    "to": to_list,
+                    "subject": f"🚨 CCTV ALERT: {subject}",
+                    "textContent": body,
+                }
+
+                response = requests.post(
+                    "https://api.brevo.com/v3/smtp/email",
+                    headers={
+                        "accept": "application/json",
+                        "api-key": api_key,
+                        "content-type": "application/json",
+                    },
+                    json=payload,
+                    timeout=15,
                 )
-                mail.send(msg)
-                print(f"✅ Email sent: {subject}")
+
+                if response.status_code == 201:
+                    print(f"✅ Email sent via Brevo: {subject}")
+                else:
+                    print(f"❌ Brevo error: {response.status_code} — {response.text}")
+
             except Exception as e:
                 print(f"❌ Email error: {e}")
                 traceback.print_exc()
