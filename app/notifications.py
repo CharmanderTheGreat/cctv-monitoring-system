@@ -2,33 +2,39 @@ from flask import current_app
 import threading
 import traceback
 import requests
+import os
 
 
 def send_email_alert(app, subject, body):
     def send():
         with app.app_context():
             try:
-                api_key = app.config.get("BREVO_API_KEY")
+                # Read directly from os.environ para sigurado
+                api_key = os.environ.get("BREVO_API_KEY") or app.config.get(
+                    "BREVO_API_KEY"
+                )
                 recipients = app.config.get("ALERT_EMAIL", [])
                 sender_email = app.config.get("MAIL_USERNAME")
 
                 print(f"📧 Sending email via Brevo to: {recipients}")
+                print(f"🔑 API Key present: {bool(api_key)}")
+                print(f"📨 Sender: {sender_email}")
 
                 if not api_key:
-                    print("❌ BREVO_API_KEY not set in environment variables!")
+                    print("❌ BREVO_API_KEY not found anywhere!")
+                    print(
+                        f"Available env vars: {[k for k in os.environ.keys() if 'BREVO' in k or 'brevo' in k]}"
+                    )
                     return
 
                 if not recipients:
-                    print(
-                        "❌ No recipients configured! Check ALERT_EMAILS in Railway Variables."
-                    )
+                    print("❌ No recipients configured!")
                     return
 
                 if not sender_email:
                     print("❌ MAIL_USERNAME not set!")
                     return
 
-                # Build recipients list for Brevo API
                 to_list = [{"email": email} for email in recipients]
 
                 payload = {
