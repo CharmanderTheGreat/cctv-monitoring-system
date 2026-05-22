@@ -318,45 +318,6 @@ def get_alerts():
     )
 
 
-@main.route("/api/alerts/simulate")
-@login_required
-@limiter.limit("5 per minute")
-def simulate_alert():
-    attack_types = [
-        {
-            "type": "port_scan",
-            "desc": "Port scan detected from external IP",
-            "severity": "high",
-        },
-        {
-            "type": "brute_force",
-            "desc": "Multiple failed login attempts detected",
-            "severity": "high",
-        },
-        {
-            "type": "suspicious_ip",
-            "desc": "Connection from suspicious IP address",
-            "severity": "medium",
-        },
-    ]
-    attack = random.choice(attack_types)
-    source_ip = f"192.168.1.{random.randint(100, 254)}"
-    alert = SecurityAlert(
-        alert_type=attack["type"],
-        source_ip=source_ip,
-        description=attack["desc"],
-        severity=attack["severity"],
-    )
-    db.session.add(alert)
-    db.session.commit()
-    log_action(f"Simulated attack: {attack['type']}")
-    send_alert(
-        subject=attack["type"].upper().replace("_", " "),
-        body=f"{attack['desc']}\nSource IP: {source_ip}\nSeverity: {attack['severity'].upper()}",
-    )
-    return jsonify({"success": True, "alert": attack["type"]})
-
-
 @main.route("/api/alerts/resolve/<int:alert_id>", methods=["POST"])
 @login_required
 @limiter.limit("20 per minute")

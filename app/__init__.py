@@ -12,7 +12,12 @@ import os
 db = SQLAlchemy()
 login_manager = LoginManager()
 bcrypt = Bcrypt()
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(
+    key_func=get_remote_address,
+    storage_uri=os.environ.get("DATABASE_URL", "memory://").replace(
+        "postgres://", "postgresql://"
+    ),
+)
 csrf = CSRFProtect()
 mail = Mail()
 
