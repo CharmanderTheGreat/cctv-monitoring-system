@@ -1,3 +1,4 @@
+# routes.py
 from flask import (
     Blueprint,
     render_template,
@@ -23,6 +24,7 @@ from pytz import timezone
 from urllib.parse import urlparse
 import bleach
 import ipaddress
+import hmac
 import os
 import cv2
 
@@ -47,10 +49,11 @@ def validate_rtsp_url(url):
 
 
 def cleanup_old_records():
-    cutoff = datetime.utcnow() - timedelta(days=30)
+    cutoff = datetime.utcnow() - timedelta(days=100)
     LoginAttempt.query.filter(LoginAttempt.timestamp < cutoff).delete()
     AuditLog.query.filter(AuditLog.timestamp < cutoff).delete()
     HoneypotLog.query.filter(HoneypotLog.timestamp < cutoff).delete()
+    SecurityAlert.query.filter(SecurityAlert.timestamp < cutoff).delete()
     db.session.commit()
 
 
@@ -259,7 +262,7 @@ def scan_network():
 @csrf.exempt
 def network_update():
     agent_key = request.headers.get("X-Agent-Key", "")
-    if not AGENT_KEY or agent_key != AGENT_KEY:
+    if not AGENT_KEY or not hmac.compare_digest(agent_key, AGENT_KEY):
         return jsonify({"success": False, "error": "Unauthorized"}), 401
 
     data = request.get_json() or {}
