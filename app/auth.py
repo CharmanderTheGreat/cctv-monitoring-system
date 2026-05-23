@@ -131,6 +131,12 @@ def login():
             login_user(user)
             session.permanent = False
             log_attempt(ip, username, True)
+
+            from app.notifications import send_login_alert
+            from flask import current_app
+
+            send_login_alert(current_app._get_current_object(), username, ip)
+
             return redirect(url_for("main.dashboard"))
         else:
             log_attempt(ip, username, False)

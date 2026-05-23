@@ -6,6 +6,8 @@ load_dotenv()
 
 
 class Config:
+    DEBUG = False
+    TESTING = False
     SECRET_KEY = os.environ.get("SECRET_KEY", "change-me-use-a-random-secret-key")
 
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL", "").replace(
