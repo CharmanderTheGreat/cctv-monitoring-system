@@ -6,6 +6,7 @@ from flask import (
     request,
     Response,
     stream_with_context,
+    abort,
 )
 from flask_login import login_required, current_user
 from app.notifications import send_alert
@@ -22,6 +23,7 @@ from app import db, limiter, csrf
 from datetime import datetime, timedelta
 from pytz import timezone
 from urllib.parse import urlparse
+from functools import wraps
 import bleach
 import ipaddress
 import hmac
@@ -30,6 +32,23 @@ import cv2
 
 PH_TZ = timezone("Asia/Manila")
 AGENT_KEY = os.environ.get("AGENT_KEY", "")
+
+
+# ─── Role-Based Access Decorator ─────────────────────────────────────────────
+def admin_required(f):
+    """
+    Decorator na nag-rerestrick ng route sa admin users lang.
+    Gagamitin kasama ng @login_required.
+    Kung viewer ang nag-access, mag-rereturn ng 403 Forbidden.
+    """
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_admin():
+            abort(403)
+        return f(*args, **kwargs)
+
+    return decorated_function
 
 
 def validate_ip_address(ip):
@@ -61,7 +80,7 @@ main = Blueprint("main", __name__)
 
 
 def log_action(action):
-    ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+    ip = request.remote_addr
     audit = AuditLog(user=current_user.username, action=action, ip_address=ip)
     db.session.add(audit)
     db.session.commit()
@@ -109,8 +128,18 @@ def stream_webcam():
 @login_required
 def stream_rtsp():
     rtsp_url = request.args.get("url", "")
+
+    if not rtsp_url:
+        return jsonify({"error": "No URL provided"}), 400
+
+    # FIXED: validate against DB first — no arbitrary URLs accepted
+    camera = Camera.query.filter_by(rtsp_url=rtsp_url).first()
+    if not camera:
+        return jsonify({"error": "Unknown stream — URL not registered"}), 403
+
     if not validate_rtsp_url(rtsp_url):
         return jsonify({"error": "Invalid RTSP URL"}), 400
+
     return Response(
         stream_with_context(generate_frames(rtsp_url)),
         mimetype="multipart/x-mixed-replace; boundary=frame",
@@ -137,7 +166,11 @@ def dashboard():
     )
 
 
+# ─── Audit Log — ADMIN ONLY ───────────────────────────────────────────────────
+
+
 @main.route("/audit")
+@admin_required
 @login_required
 def audit():
     audit_logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).all()
@@ -184,6 +217,7 @@ def get_cameras():
 
 
 @main.route("/api/cameras/add", methods=["POST"])
+@admin_required
 @login_required
 @limiter.limit("10 per minute")
 def add_camera():
@@ -228,6 +262,7 @@ def add_camera():
 
 
 @main.route("/api/cameras/delete/<int:camera_id>", methods=["DELETE"])
+@admin_required
 @login_required
 @limiter.limit("10 per minute")
 def delete_camera(camera_id):
@@ -262,7 +297,16 @@ def scan_network():
 @csrf.exempt
 def network_update():
     agent_key = request.headers.get("X-Agent-Key", "")
-    if not AGENT_KEY or not hmac.compare_digest(agent_key, AGENT_KEY):
+
+    if not AGENT_KEY or len(AGENT_KEY) < 32:
+        return jsonify(
+            {
+                "success": False,
+                "error": "Server misconfiguration: AGENT_KEY not set properly",
+            }
+        ), 500
+
+    if not hmac.compare_digest(agent_key, AGENT_KEY):
         return jsonify({"success": False, "error": "Unauthorized"}), 401
 
     data = request.get_json() or {}
@@ -329,6 +373,7 @@ def get_alerts():
 
 
 @main.route("/api/alerts/resolve/<int:alert_id>", methods=["POST"])
+@admin_required
 @login_required
 @limiter.limit("20 per minute")
 def resolve_alert(alert_id):
@@ -366,10 +411,11 @@ def get_logs():
     )
 
 
-# ─── IP Blocking ──────────────────────────────────────────────────────────────
+# ─── IP Blocking — ADMIN ONLY ────────────────────────────────────────────────
 
 
 @main.route("/api/block-ip", methods=["POST"])
+@admin_required
 @login_required
 @limiter.limit("20 per minute")
 def block_ip():
@@ -392,6 +438,7 @@ def block_ip():
 
 
 @main.route("/api/unblock-ip", methods=["POST"])
+@admin_required
 @login_required
 @limiter.limit("20 per minute")
 def unblock_ip():
@@ -409,6 +456,7 @@ def unblock_ip():
 
 
 @main.route("/api/blocked-ips")
+@admin_required
 @login_required
 @limiter.limit("30 per minute")
 def get_blocked_ips():

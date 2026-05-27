@@ -7,6 +7,7 @@ from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect, generate_csrf
 from flask_talisman import Talisman
 from flask_mail import Mail
+from werkzeug.middleware.proxy_fix import ProxyFix
 import os
 
 db = SQLAlchemy()
@@ -24,6 +25,24 @@ mail = Mail()
 def create_app():
     app = Flask(__name__)
     app.config.from_object("config.Config")
+
+    # ─── FIXED: ProxyFix middleware ───────────────────────────────────────────
+    # Kailangan ito para ma-unwrap ng Flask ang X-Forwarded-For header
+    # na ipinapadala ng Railway/Nginx proxy, para maging tama ang
+    # request.remote_addr sa auth.py at routes.py.
+    #
+    # x_for=1  → trusting 1 proxy hop (Railway)
+    # x_proto=1 → para ma-detect ang HTTPS
+    # x_host=1  → para ma-detect ang tamang hostname
+    #
+    # BABALA: Huwag dagdagan ang x_for nang higit sa bilang ng iyong
+    # trusted proxies. Kung 2 ang proxy layers, gawin x_for=2.
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app,
+        x_for=1,
+        x_proto=1,
+        x_host=1,
+    )
 
     db.init_app(app)
     login_manager.init_app(app)

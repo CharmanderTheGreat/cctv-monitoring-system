@@ -50,3 +50,4 @@ wrapt==2.1.2
 WTForms==3.2.2
 yarl==1.23.0
 sib-api-v3-sdk
+redis==5.0.1

@@ -16,6 +16,10 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     ban_until = db.Column(db.DateTime, nullable=True)
     failed_attempts = db.Column(db.Integer, default=0)
+    # ADDED: role column — 'admin' or 'viewer'. Default is 'viewer'.
+    # Existing users in the DB will get NULL; is_admin() handles that
+    # by treating NULL as 'viewer' for safety.
+    role = db.Column(db.String(20), nullable=True, default="viewer")
 
     def set_password(self, password):
         if len(password) < 8:
@@ -34,6 +38,10 @@ class User(UserMixin, db.Model):
         if self.ban_until and self.ban_until > datetime.utcnow():
             return max(0, int((self.ban_until - datetime.utcnow()).total_seconds()))
         return 0
+
+    def is_admin(self):
+        """Returns True only if role is explicitly 'admin'."""
+        return self.role == "admin"
 
 
 class Camera(db.Model):
@@ -107,11 +115,7 @@ class BlockedIP(db.Model):
 
 class TempBlockedIP(db.Model):
     __tablename__ = "temp_blocked_ips"
-
     id = db.Column(db.Integer, primary_key=True)
-
     ip_address = db.Column(db.String(50), unique=True, nullable=False)
-
     blocked_until = db.Column(db.DateTime, nullable=False)
-
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
