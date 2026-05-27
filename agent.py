@@ -31,26 +31,24 @@ def get_local_network():
         return "192.168.1.0/24", "unknown"
 
 
-def scan_network(network):
+def scan_network(network, local_ip):
     """Mag-scan ng network gamit nmap."""
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Scanning {network}...")
     devices = []
 
     try:
         nm = nmap.PortScanner()
-        # -sn = ping scan (walang port scan, mas mabilis)
-        # --host-timeout = hindi mag-aantay ng matagal sa isang host
         nm.scan(hosts=network, arguments="-sn --host-timeout 5s")
 
         for host in nm.all_hosts():
-            # Kunin ang hostname
-            hostname = "Unknown"
-            try:
-                resolved = socket.gethostbyaddr(host)[0]
-                hostname = resolved
-            except Exception:
-                if nm[host].hostname():
-                    hostname = nm[host].hostname()
+            # Skip network at broadcast
+            parts = host.split(".")
+            if parts[-1] in ["0", "255"]:
+                continue
+
+            # Skip kung hindi up
+            if nm[host].state() != "up":
+                continue
 
             # Kunin ang MAC address at vendor
             mac = "N/A"
@@ -63,13 +61,26 @@ def scan_network(network):
             except Exception:
                 pass
 
-            # Determine device type based sa hostname at vendor
-            device_type = guess_device_type(hostname, vendor, host)
+            # Skip false positives — walang MAC at hindi sariling IP
+            if mac == "N/A" and host != local_ip:
+                continue
+
+            # Kunin ang hostname
+            hostname = None
+            try:
+                resolved = socket.gethostbyaddr(host)[0]
+                hostname = resolved
+            except Exception:
+                if nm[host].hostname():
+                    hostname = nm[host].hostname()
+
+            display_name = hostname if hostname else host
+            device_type = guess_device_type(display_name, vendor, host)
 
             devices.append(
                 {
                     "ip": host,
-                    "hostname": hostname if hostname != "Unknown" else device_type,
+                    "hostname": display_name,
                     "mac": mac,
                     "vendor": vendor,
                     "device_type": device_type,
@@ -77,7 +88,7 @@ def scan_network(network):
                 }
             )
 
-            print(f"  Found: {host} — {hostname} ({vendor})")
+            print(f"  Found: {host} — {display_name} ({vendor})")
 
     except nmap.PortScannerError as e:
         print(f"[ERROR] nmap error: {e}")
@@ -224,7 +235,7 @@ def main():
         network, local_ip = get_local_network()
         print(f"[INFO] Local IP: {local_ip} | Network: {network}")
 
-        devices = scan_network(network)
+        devices = scan_network(network, local_ip)
 
         if devices:
             send_to_railway(devices)
