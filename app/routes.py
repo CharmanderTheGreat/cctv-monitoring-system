@@ -139,20 +139,23 @@ def generate_frames(source):
 def generate_frames_http(url):
     import requests
 
-    try:
-        r = requests.get(url, stream=True, timeout=10, verify=False)
-        boundary = b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
-        buf = b""
-        for chunk in r.iter_content(chunk_size=4096):
-            buf += chunk
-            start = buf.find(b"\xff\xd8")
-            end = buf.find(b"\xff\xd9")
-            if start != -1 and end != -1:
-                jpg = buf[start : end + 2]
-                buf = buf[end + 2 :]
-                yield boundary + jpg + b"\r\n"
-    except Exception as e:
-        print(f"[HTTP stream error] {e}")
+    while True:
+        try:
+            r = requests.get(url, stream=True, timeout=10, verify=False)
+            buf = b""
+            for chunk in r.iter_content(chunk_size=4096):
+                buf += chunk
+                start = buf.find(b"\xff\xd8")
+                end = buf.find(b"\xff\xd9")
+                if start != -1 and end != -1:
+                    jpg = buf[start : end + 2]
+                    buf = buf[end + 2 :]
+                    yield (
+                        b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpg + b"\r\n"
+                    )
+        except Exception as e:
+            print(f"[HTTP stream error] {e}")
+            break
 
 
 @main.route("/api/cameras/stream/webcam")
