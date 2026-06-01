@@ -140,7 +140,7 @@ def generate_frames_http(url):
     import requests
 
     try:
-        r = requests.get(url, stream=True, timeout=10)
+        r = requests.get(url, stream=True, timeout=10, verify=False)
         boundary = b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
         buf = b""
         for chunk in r.iter_content(chunk_size=4096):
