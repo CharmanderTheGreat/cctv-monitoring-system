@@ -30,18 +30,17 @@ import hmac
 import os
 import cv2
 
+# ============================================================
+# HTTP MJPEG stream — uncomment this if using HTTP mode
+import requests
+# ============================================================
+
 PH_TZ = timezone("Asia/Manila")
 AGENT_KEY = os.environ.get("AGENT_KEY", "")
 
 
 # ─── Role-Based Access Decorator ─────────────────────────────────────────────
 def admin_required(f):
-    """
-    Decorator na nag-rerestrick ng route sa admin users lang.
-    Gagamitin kasama ng @login_required.
-    Kung viewer ang nag-access, mag-rereturn ng 403 Forbidden.
-    """
-
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_admin():
@@ -63,6 +62,14 @@ def validate_rtsp_url(url):
     try:
         parsed = urlparse(url)
         return parsed.scheme == "rtsp" and bool(parsed.netloc)
+    except Exception:
+        return False
+
+
+def validate_http_url(url):
+    try:
+        parsed = urlparse(url)
+        return parsed.scheme in ("http", "https") and bool(parsed.netloc)
     except Exception:
         return False
 
@@ -95,6 +102,12 @@ def convert_to_ph_time(dt):
 # ─── Camera Streaming ─────────────────────────────────────────────────────────
 
 
+# ============================================================
+# MODE 1: RTSP streaming via OpenCV (default)
+# Use this if your camera has a public RTSP URL
+# e.g. rtsp://admin:pass@publicIP:554/stream
+# ============================================================
+"""
 def generate_frames(source):
     cap = cv2.VideoCapture(source)
     if not cap.isOpened():
@@ -113,18 +126,45 @@ def generate_frames(source):
             )
     finally:
         cap.release()
+"""
+
+
+# ============================================================
+# MODE 2: HTTP MJPEG streaming (e.g. IP Webcam app)
+# Use this if your camera gives an HTTP stream URL
+# e.g. http://192.168.1.13:8080/video  or  https://xxxx.trycloudflare.com/video
+# To activate: uncomment the function below + uncomment stream_http route
+# Also uncomment: import requests at the top of this file
+# ============================================================
+def generate_frames_http(url):
+    import requests
+
+    try:
+        r = requests.get(url, stream=True, timeout=10)
+        boundary = b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
+        buf = b""
+        for chunk in r.iter_content(chunk_size=4096):
+            buf += chunk
+            start = buf.find(b"\xff\xd8")
+            end = buf.find(b"\xff\xd9")
+            if start != -1 and end != -1:
+                jpg = buf[start : end + 2]
+                buf = buf[end + 2 :]
+                yield boundary + jpg + b"\r\n"
+    except Exception as e:
+        print(f"[HTTP stream error] {e}")
 
 
 @main.route("/api/cameras/stream/webcam")
 @login_required
 def stream_webcam():
-    return Response(
-        stream_with_context(generate_frames(0)),
-        mimetype="multipart/x-mixed-replace; boundary=frame",
-    )
+    return jsonify({"error": "Webcam handled client-side"}), 400
 
 
-@main.route("/api/cameras/stream/rtsp")
+# ============================================================
+# MODE 1: RTSP stream route (default — active)
+# ============================================================
+"""@main.route("/api/cameras/stream/rtsp")
 @login_required
 def stream_rtsp():
     rtsp_url = request.args.get("url", "")
@@ -132,7 +172,6 @@ def stream_rtsp():
     if not rtsp_url:
         return jsonify({"error": "No URL provided"}), 400
 
-    # FIXED: validate against DB first — no arbitrary URLs accepted
     camera = Camera.query.filter_by(rtsp_url=rtsp_url).first()
     if not camera:
         return jsonify({"error": "Unknown stream — URL not registered"}), 403
@@ -142,6 +181,36 @@ def stream_rtsp():
 
     return Response(
         stream_with_context(generate_frames(rtsp_url)),
+        mimetype="multipart/x-mixed-replace; boundary=frame",
+    )
+"""
+
+
+# ============================================================
+# MODE 2: HTTP MJPEG stream route
+# To activate: uncomment the entire route below
+# Also uncomment generate_frames_http() above
+# In dashboard.html, switch img src to /api/cameras/stream/http?url=...
+# ============================================================
+#
+#
+@main.route("/api/cameras/stream/http")
+@login_required
+def stream_http():
+    http_url = request.args.get("url", "")
+
+    if not http_url:
+        return jsonify({"error": "No URL provided"}), 400
+
+    camera = Camera.query.filter_by(rtsp_url=http_url).first()
+    if not camera:
+        return jsonify({"error": "Unknown stream — URL not registered"}), 403
+
+    if not validate_http_url(http_url):
+        return jsonify({"error": "Invalid HTTP URL"}), 400
+
+    return Response(
+        stream_with_context(generate_frames_http(http_url)),
         mimetype="multipart/x-mixed-replace; boundary=frame",
     )
 
@@ -244,9 +313,14 @@ def add_camera():
             {"success": False, "error": "Camera with this IP already exists"}
         ), 400
 
-    rtsp_url = (
-        "webcam" if ip_address == "0.0.0.0" else f"rtsp://{ip_address}:554/stream"
-    )
+    # ── Accept custom RTSP or HTTP URL from frontend ──
+    custom_rtsp = bleach.clean(data.get("rtsp_url", "")).strip()
+    if ip_address == "0.0.0.0":
+        rtsp_url = "webcam"
+    elif custom_rtsp:
+        rtsp_url = custom_rtsp
+    else:
+        rtsp_url = f"rtsp://{ip_address}:554/stream"
 
     camera = Camera(
         name=name,
