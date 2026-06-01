@@ -138,28 +138,27 @@ def generate_frames(source):
 # ============================================================
 def generate_frames_http(url):
     import requests
-    import time
 
-    base = url.replace("/video", "")
-    shot_url = base + "/shot.jpg"
-    while True:
-        try:
-            r = requests.get(
-                url,
-                stream=True,
-                timeout=10,
-                verify=False,
-                headers={"ngrok-skip-browser-warning": "true"},
-            )
-            if r.status_code == 200:
-                yield (
-                    b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + r.content + b"\r\n"
-                )
-            time.sleep(0.2)
-        except Exception as e:
-            print(f"[stream error] {e}")
-            time.sleep(1)
-            break
+    try:
+        r = requests.get(
+            url,
+            stream=True,
+            timeout=10,
+            verify=False,
+            headers={"ngrok-skip-browser-warning": "true"},
+        )
+        buf = b""
+        for chunk in r.iter_content(chunk_size=4096):
+            buf += chunk
+            start = buf.find(b"\xff\xd8")
+            end = buf.find(b"\xff\xd9")
+            if start != -1 and end != -1:
+                jpg = buf[start : end + 2]
+                buf = buf[end + 2 :]
+                yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpg + b"\r\n")
+    except Exception as e:
+        print(f"[stream error] {e}")
+        return
 
 
 @main.route("/api/cameras/stream/webcam")
