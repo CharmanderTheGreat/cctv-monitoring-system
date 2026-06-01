@@ -144,7 +144,13 @@ def generate_frames_http(url):
     shot_url = base + "/shot.jpg"
     while True:
         try:
-            r = requests.get(shot_url, timeout=5, verify=False)
+            r = requests.get(
+                url,
+                stream=True,
+                timeout=10,
+                verify=False,
+                headers={"ngrok-skip-browser-warning": "true"},
+            )
             if r.status_code == 200:
                 yield (
                     b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + r.content + b"\r\n"
