@@ -10,6 +10,7 @@ from flask_mail import Mail
 from werkzeug.middleware.proxy_fix import ProxyFix
 import os
 
+# Initialize core Flask extensions
 db = SQLAlchemy()
 login_manager = LoginManager()
 bcrypt = Bcrypt()
@@ -23,20 +24,40 @@ mail = Mail()
 
 
 def create_app():
-    app = Flask(__name__)
+    # ─── FRONTEND TEMPLATE & STATIC PATH RESOLUTION ───────────────────────────
+    # Traverse two directory levels up from backend/app/__init__.py to find the
+    # root workspace folder (cctv-monitoring-system/):
+    #   __file__            -> backend/app/__init__.py
+    #   dirname(__file__)   -> backend/app/
+    #   ..                  -> backend/
+    #   ../..               -> root folder
+    #
+    # Then explicitly bind Flask's template and static directories to the
+    # separated frontend/ directory to maintain clean architecture while
+    # preserving server-side Jinja template rendering.
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    template_folder = os.path.join(base_dir, "frontend", "templates")
+    static_folder = os.path.join(base_dir, "frontend", "static")
+
+    app = Flask(
+        __name__,
+        template_folder=template_folder,
+        static_folder=static_folder,
+    )
     app.config.from_object("config.Config")
 
-    # ─── FIXED: ProxyFix middleware ───────────────────────────────────────────
-    # Kailangan ito para ma-unwrap ng Flask ang X-Forwarded-For header
-    # na ipinapadala ng Railway/Nginx proxy, para maging tama ang
-    # request.remote_addr sa auth.py at routes.py.
+    # ─── PROXYFIX MIDDLEWARE ──────────────────────────────────────────────────
+    # Required to correctly evaluate the X-Forwarded-For and X-Forwarded-Proto
+    # headers supplied by reverse proxies (e.g., Railway or Nginx).
+    # This guarantees that request.remote_addr reflects the genuine client IP
+    # rather than the internal load balancer address for rate limiting and logging.
     #
-    # x_for=1  → trusting 1 proxy hop (Railway)
-    # x_proto=1 → para ma-detect ang HTTPS
-    # x_host=1  → para ma-detect ang tamang hostname
+    # x_for=1   -> Trusts 1 upstream reverse proxy layer (Railway)
+    # x_proto=1 -> Correctly identifies incoming HTTPS schemes
+    # x_host=1  -> Accurately reads the forwarded host domain
     #
-    # BABALA: Huwag dagdagan ang x_for nang higit sa bilang ng iyong
-    # trusted proxies. Kung 2 ang proxy layers, gawin x_for=2.
+    # WARNING: Do not increase x_for beyond the actual number of trusted reverse
+    # proxy hops to prevent IP spoofing vulnerabilities.
     app.wsgi_app = ProxyFix(
         app.wsgi_app,
         x_for=1,
@@ -44,6 +65,7 @@ def create_app():
         x_host=1,
     )
 
+    # Initialize extensions with the application instance
     db.init_app(app)
     login_manager.init_app(app)
     bcrypt.init_app(app)
@@ -51,12 +73,14 @@ def create_app():
     csrf.init_app(app)
     mail.init_app(app)
 
+    # Inject the CSRF token into all Jinja templates automatically
     @app.context_processor
     def inject_csrf():
         return dict(csrf_token=generate_csrf)
 
     is_production = os.environ.get("RAILWAY_ENVIRONMENT") == "production"
 
+    # Strict Content Security Policy (CSP) headers to mitigate XSS attacks
     csp = {
         "default-src": "'self'",
         "script-src": "'self' 'unsafe-inline'",
@@ -73,8 +97,10 @@ def create_app():
         referrer_policy="strict-origin-when-cross-origin",
     )
 
+    # Define the default redirect endpoint for unauthenticated users
     login_manager.login_view = "auth.login"
 
+    # Register modular blueprints
     from app.auth import auth as auth_blueprint
     from app.routes import main as main_blueprint
     from app.network_core import network_core as network_core_blueprint
@@ -83,11 +109,13 @@ def create_app():
     app.register_blueprint(main_blueprint)
     app.register_blueprint(network_core_blueprint)
 
+    # Ensure all defined SQLAlchemy models and tables exist on application start
     with app.app_context():
         from app import models
 
         db.create_all()
 
+    # Register centralized HTTP exception handlers
     register_error_handlers(app)
 
     return app

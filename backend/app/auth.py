@@ -16,11 +16,11 @@ import os
 auth = Blueprint("auth", __name__)
 
 
-# ─── Redis client (para sa atomic brute force counting) ───────────────────────
-# Ginagamit ang parehong REDIS_URL na ginagamit ng Flask-Limiter.
-# Hindi na nag-cache ng connection sa global variable — redis.from_url()
-# ay gumagamit ng built-in connection pool internally, kaya safe ito
-# sa multi-worker (gunicorn) environments at mag-rereconnect kung mag-crash.
+# ─── Redis client for atomic brute force counting ─────────────────────────────
+# Uses the same REDIS_URL utilized by Flask-Limiter.
+# Connection caching in global variables is avoided — redis.from_url()
+# uses a built-in connection pool internally, making it safe for
+# multi-worker (gunicorn) environments with automatic reconnection on crashes.
 def get_redis():
     redis_url = os.environ.get("REDIS_URL", "")
     if not redis_url:
@@ -32,9 +32,9 @@ def get_redis():
 
 
 # ─── IP Helper ────────────────────────────────────────────────────────────────
-# FIXED: Consistent na lang ang paggamit ng request.remote_addr sa lahat ng lugar.
-# Ang ProxyFix middleware sa __init__.py ang bahala sa pag-unwrap ng X-Forwarded-For
-# para maging tama ang request.remote_addr kahit nasa likod ng Railway proxy.
+# FIXED: Consistent usage of request.remote_addr across all routes.
+# The ProxyFix middleware in __init__.py handles unwrapping X-Forwarded-For
+# so request.remote_addr remains accurate even behind the Railway proxy.
 def get_client_ip():
     return request.remote_addr
 
@@ -65,12 +65,12 @@ def is_ip_temp_banned(ip):
 
 
 # ─── Brute Force Counting ─────────────────────────────────────────────────────
-# FIXED: Gumagamit ng Redis INCR (atomic) para sa fail counting.
-# Kung walang Redis, nag-fa-fallback sa dating DB-based counting
-# (mas ligtas pa rin kaysa wala, pero mas mainam ang Redis).
+# FIXED: Uses Redis INCR (atomic) for fail counting.
+# If Redis is unavailable, it falls back to DB-based counting
+# (safer than nothing, though Redis is preferred).
 
 MAX_ATTEMPTS = 5
-BLOCK_WINDOW_SECONDS = 15 * 60  # 15 minuto
+BLOCK_WINDOW_SECONDS = 15 * 60  # 15 minutes
 
 
 def _redis_increment_fail(ip):
@@ -87,7 +87,7 @@ def _redis_increment_fail(ip):
         pipe.incr(key)
         pipe.expire(key, BLOCK_WINDOW_SECONDS)
         results = pipe.execute()
-        return results[0]  # bagong count pagkatapos ng increment
+        return results[0]  # new count after increment
     except Exception:
         return None
 
@@ -104,7 +104,7 @@ def _redis_reset_fails(ip):
 
 
 def _db_count_recent_fails(ip):
-    """Fallback: count recent fails from DB (non-atomic, pero may fallback pa rin)."""
+    """Fallback: count recent fails from DB (non-atomic, but acts as a reliable fallback)."""
     block_time = datetime.utcnow() - timedelta(minutes=15)
     return LoginAttempt.query.filter(
         LoginAttempt.ip_address == ip,
@@ -122,11 +122,11 @@ def log_attempt(ip, username, success):
     db.session.add(attempt)
 
     if not success:
-        # FIXED: Subukan muna ang Redis (atomic). Kung wala, fallback sa DB.
+        # FIXED: Try Redis first (atomic). If unavailable, fall back to DB.
         fail_count = _redis_increment_fail(ip)
         if fail_count is None:
-            # Walang Redis — gamitin ang DB (hindi atomic pero may fallback)
-            db.session.commit()  # i-save muna ang attempt bago mag-count
+            # No Redis — use DB fallback (non-atomic)
+            db.session.commit()  # commit attempt first before counting
             fail_count = _db_count_recent_fails(ip)
         else:
             db.session.commit()
@@ -161,7 +161,7 @@ def log_attempt(ip, username, success):
                 body=f"Multiple failed login attempts\nIP: {ip}\nUsername: {username}",
             )
     else:
-        # Successful login — i-reset ang fail counter
+        # Successful login — reset the fail counter
         _redis_reset_fails(ip)
         db.session.commit()
 
@@ -221,8 +221,8 @@ def login():
                 )
                 return redirect(url_for("auth.login"))
             else:
-                # FIXED: Hindi na isinasama ang remaining attempts para
-                # hindi ma-enumerate ng attacker ang state ng rate limiting
+                # FIXED: Omit remaining attempts count to prevent attackers
+                # from enumerating rate-limiting states
                 flash("Invalid credentials.", "danger")
                 return redirect(url_for("auth.login"))
 

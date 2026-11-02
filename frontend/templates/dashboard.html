@@ -422,7 +422,6 @@
 
 <div class="main-content">
 
-    <!-- LEFT: CAMERAS -->
     <div class="cameras-section">
         <div class="cameras-header">
             <h2>📷 CAMERA FEEDS</h2>
@@ -442,27 +441,10 @@
                             <div style="font-size:11px; color:#374151; margin-top:6px;">Webcam unavailable</div>
                         </div>
                     {% else %}
-                        <!-- ============================================================ -->
-                        <!-- MODE 1: RTSP stream (default — active)                       -->
-                        <!-- Use this if camera has a public RTSP URL                     -->
-                        <!-- ============================================================ -->
-                        {# <img class="stream"
-                             src="/api/cameras/stream/rtsp?url={{ camera.rtsp_url }}"
-                             alt="Camera Feed"
-                             onerror="showFallback({{ camera.id }}, '{{ camera.ip_address }}')"> #}
-
-                        <!-- ============================================================ -->
-                        <!-- MODE 2: HTTP MJPEG stream (e.g. IP Webcam + cloudflare)      -->
-                        <!-- To activate:                                                  -->
-                        <!--   1. Comment out MODE 1 img above                            -->
-                        <!--   2. Remove {# and #} below                                  -->
-                        <!--   3. Uncomment stream_http route in routes.py                -->
-                        <!-- ============================================================ -->
                         <img class="stream"
-                             src="/api/cameras/stream/http?url={{ camera.rtsp_url }}"
+                             src="/api/cameras/stream?url={{ camera.rtsp_url }}"
                              alt="Camera Feed"
-                             onerror="showFallback({{ camera.id }}, '{{ camera.ip_address }}')"> 
-
+                             onerror="showFallback({{ camera.id }}, '{{ camera.ip_address }}')">
                         <div class="cam-fallback" id="fallback-{{ camera.id }}" style="display:none; position:absolute; inset:0;">
                             <div style="font-size:36px;">📷</div>
                             <div style="font-size:11px; color:#374151; margin-top:6px;">{{ camera.ip_address }}</div>
@@ -491,7 +473,6 @@
         </div>
     </div>
 
-    <!-- RIGHT: ALERTS + DEVICES -->
     <div class="right-panel">
 
         <div class="card">
@@ -587,7 +568,6 @@
     </div>
 </div>
 
-<!-- ADD CAMERA MODAL — only rendered for admin -->
 {% if current_user.is_admin() %}
 <div class="modal" id="add-camera-modal">
     <div class="modal-box">
@@ -616,18 +596,10 @@
             <input type="text" id="cam-ip" placeholder="e.g. 192.168.1.100">
         </div>
         <div class="form-group" id="stream-url-field" style="display:none;">
-            <!-- ============================================================ -->
-            <!-- MODE 1: RTSP URL label (default)                             -->
-            <!-- MODE 2: change label text to "HTTP Stream URL"               -->
-            <!-- ============================================================ -->
-            <label>
-                RTSP URL
-                <span style="color:#4b5563; font-size:11px;">(optional)</span>
-            </label>
-            <input type="text" id="cam-rtsp" placeholder="e.g. rtsp://admin:pass@publicIP:554/stream">
+            <label>Stream URL <span style="color:#4b5563; font-size:11px;">(optional)</span></label>
+            <input type="text" id="cam-rtsp" placeholder="rtsp://... or https://xxxx.ngrok-free.dev/video">
             <div class="stream-hint">
-                Leave blank to auto-generate from IP ·
-                For HTTP mode use full URL e.g. https://xxxx.trycloudflare.com/video
+                Leave blank to auto-generate from IP · Supports RTSP and HTTP/HTTPS
             </div>
         </div>
         <div class="form-group">
@@ -658,7 +630,6 @@
         setTimeout(() => t.classList.remove('show'), 3000);
     }
 
-    // ─── Webcam ───────────────────────────────────────────────
     let sharedWebcamStream = null;
 
     async function initWebcams() {
@@ -688,7 +659,6 @@
         if (fb) fb.style.display = 'flex';
     }
 
-    // ─── Modal (admin only) ───────────────────────────────────
     function openAddCamera() {
         const modal = document.getElementById('add-camera-modal');
         if (!modal) return;
@@ -708,11 +678,10 @@
     }
 
     function toggleCamType(type) {
-        document.getElementById('ip-field').style.display        = type === 'webcam' ? 'none' : 'block';
+        document.getElementById('ip-field').style.display         = type === 'webcam' ? 'none' : 'block';
         document.getElementById('stream-url-field').style.display = type === 'webcam' ? 'none' : 'block';
     }
 
-    // ─── Add Camera (admin only) ──────────────────────────────
     function addCamera() {
         const name     = document.getElementById('cam-name').value.trim();
         const location = document.getElementById('cam-location').value.trim();
@@ -742,7 +711,6 @@
         .catch(() => showToast('Error adding camera'));
     }
 
-    // ─── Delete Camera (admin only) ───────────────────────────
     function deleteCamera(id) {
         if (!confirm('Delete this camera?')) return;
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
@@ -761,7 +729,6 @@
         });
     }
 
-    // ─── Refresh Devices ─────────────────────────────────────
     function refreshDevices() {
         const btn = document.getElementById('scan-btn');
         btn.disabled = true;
@@ -801,7 +768,6 @@
         });
     }
 
-    // ─── Resolve Alert (admin only) ───────────────────────────
     function resolveAlert(id) {
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         fetch(`/api/alerts/resolve/${id}`, {
@@ -825,7 +791,6 @@
         .catch(() => showToast('Error resolving alert'));
     }
 
-    // ─── Block IP from Alert (admin only) ────────────────────
     function blockIPFromAlert(ip, alertType) {
         if (!confirm(`Block IP ${ip}?\nReason: ${alertType} attack detected`)) return;
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
@@ -847,19 +812,16 @@
 
     document.addEventListener('DOMContentLoaded', initWebcams);
 
-    // ─── Session Timeout Warning ──────────────────────────────
     (function () {
         const SESSION_MINUTES = 15;
         const WARN_BEFORE_SECONDS = 120;
         const TOTAL_SECONDS = SESSION_MINUTES * 60;
 
         let lastActivity = Date.now();
-        let warnToastShown = false;
 
         ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
             document.addEventListener(evt, () => {
                 lastActivity = Date.now();
-                warnToastShown = false;
                 hideWarnToast();
             }, { passive: true });
         });
@@ -903,13 +865,11 @@
         setInterval(() => {
             const idleSecs = Math.floor((Date.now() - lastActivity) / 1000);
             const secsLeft = TOTAL_SECONDS - idleSecs;
-
             if (secsLeft <= 0) {
                 hideWarnToast();
                 window.location.href = '/logout';
                 return;
             }
-
             if (secsLeft <= WARN_BEFORE_SECONDS) {
                 showWarnToast(secsLeft);
             } else {

@@ -10,7 +10,7 @@ load_dotenv()
 
 RAILWAY_URL = os.environ.get(
     "RAILWAY_URL",
-    "https://cctv-monitoringsystem-networkadministration-production.up.railway.app",
+    "web-production-28188.up.railway.app",
 )
 AGENT_KEY = os.environ.get("AGENT_KEY", "")
 SCAN_INTERVAL_SECONDS = 60  # mag-sscan every 1 minute

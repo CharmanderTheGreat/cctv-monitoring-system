@@ -1,4 +1,3 @@
-# routes.py
 from flask import (
     Blueprint,
     render_template,
@@ -29,17 +28,13 @@ import ipaddress
 import hmac
 import os
 import cv2
-
-# ============================================================
-# HTTP MJPEG stream — uncomment this if using HTTP mode
 import requests
-# ============================================================
+import time
 
 PH_TZ = timezone("Asia/Manila")
 AGENT_KEY = os.environ.get("AGENT_KEY", "")
 
 
-# ─── Role-Based Access Decorator ─────────────────────────────────────────────
 def admin_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -102,62 +97,49 @@ def convert_to_ph_time(dt):
 # ─── Camera Streaming ─────────────────────────────────────────────────────────
 
 
-# ============================================================
-# MODE 1: RTSP streaming via OpenCV (default)
-# Use this if your camera has a public RTSP URL
-# e.g. rtsp://admin:pass@publicIP:554/stream
-# ============================================================
-"""
-def generate_frames(source):
-    cap = cv2.VideoCapture(source)
-    if not cap.isOpened():
-        return
-    try:
-        while True:
-            success, frame = cap.read()
-            if not success:
-                break
-            ret, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
-            if not ret:
-                break
-            frame_bytes = buffer.tobytes()
-            yield (
-                b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n"
-            )
-    finally:
-        cap.release()
-"""
-
-
-# ============================================================
-# MODE 2: HTTP MJPEG streaming (e.g. IP Webcam app)
-# Use this if your camera gives an HTTP stream URL
-# e.g. http://192.168.1.13:8080/video  or  https://xxxx.trycloudflare.com/video
-# To activate: uncomment the function below + uncomment stream_http route
-# Also uncomment: import requests at the top of this file
-# ============================================================
-def generate_frames_http(url):
-    import requests
-    import time
-
-    base = url.replace("/video", "")
-    shot_url = base + "/shot.jpg"
-    try:
-        while True:
-            r = requests.get(
-                shot_url,
-                timeout=5,
-                verify=False,
-                headers={"ngrok-skip-browser-warning": "true"},
-            )
-            if r.status_code == 200:
-                yield (
-                    b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + r.content + b"\r\n"
+def generate_frames_auto(url):
+    if url.startswith("rtsp://"):
+        cap = cv2.VideoCapture(url)
+        if not cap.isOpened():
+            return
+        try:
+            while True:
+                success, frame = cap.read()
+                if not success:
+                    break
+                ret, buffer = cv2.imencode(
+                    ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70]
                 )
-            time.sleep(0.5)
-    except Exception as e:
-        print(f"[stream error] {e}")
-        return
+                if not ret:
+                    break
+                yield (
+                    b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
+                    + buffer.tobytes()
+                    + b"\r\n"
+                )
+        finally:
+            cap.release()
+    else:
+        base = url.replace("/video", "").rstrip("/")
+        shot_url = base + "/shot.jpg"
+        try:
+            while True:
+                r = requests.get(
+                    shot_url,
+                    timeout=5,
+                    verify=False,
+                    headers={"ngrok-skip-browser-warning": "true"},
+                )
+                if r.status_code == 200:
+                    yield (
+                        b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
+                        + r.content
+                        + b"\r\n"
+                    )
+                time.sleep(0.5)
+        except Exception as e:
+            print(f"[stream error] {e}")
+            return
 
 
 @main.route("/api/cameras/stream/webcam")
@@ -166,61 +148,25 @@ def stream_webcam():
     return jsonify({"error": "Webcam handled client-side"}), 400
 
 
-# ============================================================
-# MODE 1: RTSP stream route (default — active)
-# ============================================================
-"""@main.route("/api/cameras/stream/rtsp")
+@main.route("/api/cameras/stream")
 @login_required
-def stream_rtsp():
-    rtsp_url = request.args.get("url", "")
+def stream_camera():
+    url = request.args.get("url", "")
 
-    if not rtsp_url:
+    if not url:
         return jsonify({"error": "No URL provided"}), 400
 
-    camera = Camera.query.filter_by(rtsp_url=rtsp_url).first()
+    camera = Camera.query.filter_by(rtsp_url=url).first()
     if not camera:
         return jsonify({"error": "Unknown stream — URL not registered"}), 403
 
-    if not validate_rtsp_url(rtsp_url):
-        return jsonify({"error": "Invalid RTSP URL"}), 400
+    if not validate_rtsp_url(url) and not validate_http_url(url):
+        return jsonify({"error": "Invalid URL"}), 400
 
     return Response(
-        stream_with_context(generate_frames(rtsp_url)),
+        stream_with_context(generate_frames_auto(url)),
         mimetype="multipart/x-mixed-replace; boundary=frame",
     )
-"""
-
-
-# ============================================================
-# MODE 2: HTTP MJPEG stream route
-# To activate: uncomment the entire route below
-# Also uncomment generate_frames_http() above
-# In dashboard.html, switch img src to /api/cameras/stream/http?url=...
-# ============================================================
-#
-#
-@main.route("/api/cameras/stream/http")
-@login_required
-def stream_http():
-    http_url = request.args.get("url", "")
-
-    if not http_url:
-        return jsonify({"error": "No URL provided"}), 400
-
-    camera = Camera.query.filter_by(rtsp_url=http_url).first()
-    if not camera:
-        return jsonify({"error": "Unknown stream — URL not registered"}), 403
-
-    if not validate_http_url(http_url):
-        return jsonify({"error": "Invalid HTTP URL"}), 400
-
-    return Response(
-        stream_with_context(generate_frames_http(http_url)),
-        mimetype="multipart/x-mixed-replace; boundary=frame",
-    )
-
-
-# ─── Dashboard ────────────────────────────────────────────────────────────────
 
 
 @main.route("/dashboard")
@@ -238,9 +184,6 @@ def dashboard():
         logs=logs,
         unresolved_count=unresolved_count,
     )
-
-
-# ─── Audit Log — ADMIN ONLY ───────────────────────────────────────────────────
 
 
 @main.route("/audit")
@@ -265,9 +208,6 @@ def audit():
         login_attempts=login_attempts,
         current_user=current_user,
     )
-
-
-# ─── Camera API ───────────────────────────────────────────────────────────────
 
 
 @main.route("/api/cameras")
@@ -318,7 +258,6 @@ def add_camera():
             {"success": False, "error": "Camera with this IP already exists"}
         ), 400
 
-    # ── Accept custom RTSP or HTTP URL from frontend ──
     custom_rtsp = bleach.clean(data.get("rtsp_url", "")).strip()
     if ip_address == "0.0.0.0":
         rtsp_url = "webcam"
@@ -350,9 +289,6 @@ def delete_camera(camera_id):
     db.session.delete(camera)
     db.session.commit()
     return jsonify({"success": True})
-
-
-# ─── Network Scan ─────────────────────────────────────────────────────────────
 
 
 @main.route("/api/network/scan", methods=["POST"])
@@ -425,9 +361,6 @@ def network_update():
     return jsonify({"success": True, "saved": len(saved)})
 
 
-# ─── Alerts ───────────────────────────────────────────────────────────────────
-
-
 @main.route("/api/alerts")
 @login_required
 @limiter.limit("30 per minute")
@@ -465,9 +398,6 @@ def resolve_alert(alert_id):
     return jsonify({"success": True})
 
 
-# ─── Logs ─────────────────────────────────────────────────────────────────────
-
-
 @main.route("/api/logs")
 @login_required
 @limiter.limit("30 per minute")
@@ -488,9 +418,6 @@ def get_logs():
             for l in logs
         ]
     )
-
-
-# ─── IP Blocking — ADMIN ONLY ────────────────────────────────────────────────
 
 
 @main.route("/api/block-ip", methods=["POST"])
