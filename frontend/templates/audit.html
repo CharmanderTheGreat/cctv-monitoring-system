@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CCTV Monitor — Audit Log</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body {
@@ -25,9 +27,16 @@
             align-items: center;
             flex: 0 0 auto;
         }
-        .navbar h1 { color: #00e5ff; font-size: 18px; letter-spacing: 2px; }
+        .navbar h1 { 
+            color: #00e5ff; 
+            font-size: 18px; 
+            letter-spacing: 2px; 
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
         .nav-links { display: flex; gap: 20px; align-items: center; }
-        .nav-links a { color: #6b7280; text-decoration: none; font-size: 13px; }
+        .nav-links a { color: #6b7280; text-decoration: none; font-size: 13px; display: flex; align-items: center; gap: 5px; }
         .nav-links a:hover { color: #00e5ff; }
 
         .main-grid {
@@ -58,7 +67,14 @@
             border-bottom: 1px solid #1f2937;
             flex: 0 0 auto;
         }
-        .card-header h2 { color: #00e5ff; font-size: 13px; letter-spacing: 1px; }
+        .card-header h2 { 
+            color: #00e5ff; 
+            font-size: 13px; 
+            letter-spacing: 1px; 
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
         .table-scroll {
             overflow-y: auto;
             flex: 1;
@@ -91,7 +107,7 @@
         .badge-danger { background: #7f1d1d; color: #fca5a5; }
         .badge-warning { background: #78350f; color: #fcd34d; }
         .empty { color: #6b7280; text-align: center; padding: 20px; font-size: 13px; }
-        .btn { padding: 4px 10px; border-radius: 6px; border: none; font-size: 11px; font-weight: bold; cursor: pointer; transition: opacity 0.2s; }
+        .btn { padding: 4px 10px; border-radius: 6px; border: none; font-size: 11px; font-weight: bold; cursor: pointer; transition: opacity 0.2s; display: inline-flex; align-items: center; gap: 4px; }
         .btn:hover { opacity: 0.8; }
         .btn-danger { background: #7f1d1d; color: #fca5a5; }
         .btn-success { background: #14532d; color: #86efac; }
@@ -114,20 +130,20 @@
 <body>
 
 <div class="navbar">
-    <h1>🎥 CCTV MONITOR — AUDIT LOG</h1>
+    <h1><i class="fa-solid fa-video"></i> CCTV MONITOR — AUDIT LOG</h1>
     <div class="nav-links">
-        <span style="color:#60a5fa; font-size:11px; font-weight:bold; background:#1e3a5f; padding:2px 10px; border-radius:20px; letter-spacing:1px;">🔑 ADMIN</span>
-        <a href="/dashboard">← Dashboard</a>
-        <a href="/logout">Logout</a>
+        <span style="color:#60a5fa; font-size:11px; font-weight:bold; background:#1e3a5f; padding:2px 10px; border-radius:20px; letter-spacing:1px; display:flex; align-items:center; gap:4px;"><i class="fa-solid fa-key"></i> ADMIN</span>
+        <a href="/dashboard"><i class="fa-solid fa-arrow-left"></i> Dashboard</a>
+        <a href="/logout"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
     </div>
 </div>
 
 <div class="main-grid">
 
-    <!-- Blocked IPs -->
+    <!-- Blocked IPs Section -->
     <div class="card">
         <div class="card-header">
-            <h2>🚫 BLOCKED IPs</h2>
+            <h2><i class="fa-solid fa-ban"></i> BLOCKED IPs</h2>
         </div>
         <div class="table-scroll">
             <table>
@@ -154,10 +170,10 @@
         </div>
     </div>
 
-    <!-- Honeypot -->
+    <!-- Honeypot Triggers Section -->
     <div class="card">
         <div class="card-header">
-            <h2>🪤 HONEYPOT TRIGGERS</h2>
+            <h2><i class="fa-solid fa-shield-virus"></i> HONEYPOT TRIGGERS</h2>
         </div>
         <div class="table-scroll">
             <table>
@@ -185,7 +201,7 @@
                         <td><span class="badge badge-warning">{{ log.method }}</span></td>
                         <td>{{ log.user_agent }}</td>
                         <td>
-                            <button class="btn btn-danger" onclick="blockIP('{{ log.ip_address }}', 'Honeypot trigger')">🚫 Block</button>
+                            <button class="btn btn-danger" onclick="blockIP('{{ log.ip_address }}', 'Honeypot trigger')"><i class="fa-solid fa-ban"></i> Block</button>
                         </td>
                     </tr>
                     {% else %}
@@ -196,10 +212,10 @@
         </div>
     </div>
 
-    <!-- Login Attempts -->
+    <!-- Login Attempts Section -->
     <div class="card">
         <div class="card-header">
-            <h2>🔐 LOGIN ATTEMPTS</h2>
+            <h2><i class="fa-solid fa-right-to-bracket"></i> LOGIN ATTEMPTS</h2>
         </div>
         <div class="table-scroll">
             <table>
@@ -225,11 +241,11 @@
                         <td>{{ attempt.ip_address }}</td>
                         <td>
                             {% if attempt.username == current_user.username %}
-                                <span style="color: #00e5ff;">👤</span>
+                                <span style="color: #00e5ff;"><i class="fa-solid fa-user"></i></span>
                                 <strong style="background: #00e5ff20; padding: 2px 6px; border-radius: 10px;">YOU</strong>
                                 <span style="color: #00e5ff;"> {{ attempt.username }}</span>
                             {% else %}
-                                <span style="color: #6b7280;">👤</span> {{ attempt.username }}
+                                <span style="color: #6b7280;"><i class="fa-solid fa-user"></i></span> {{ attempt.username }}
                             {% endif %}
                         </td>
                         <td>
@@ -241,7 +257,7 @@
                         </td>
                         <td>{{ attempt.timestamp.strftime('%Y-%m-%d %I:%M:%S %p') }}</td>
                         <td>
-                            <button class="btn btn-danger" onclick="blockIP('{{ attempt.ip_address }}', 'Suspicious login activity')">🚫</button>
+                            <button class="btn btn-danger" onclick="blockIP('{{ attempt.ip_address }}', 'Suspicious login activity')"><i class="fa-solid fa-ban"></i> Block</button>
                         </td>
                     </tr>
                     {% else %}
@@ -252,10 +268,10 @@
         </div>
     </div>
 
-    <!-- Activity Log -->
+    <!-- User Activity Log Section -->
     <div class="card">
         <div class="card-header">
-            <h2>📋 USER ACTIVITY LOG</h2>
+            <h2><i class="fa-solid fa-clipboard-list"></i> USER ACTIVITY LOG</h2>
         </div>
         <div class="table-scroll">
             <table>
@@ -278,9 +294,9 @@
                     <tr>
                         <td style="color:#00e5ff;">
                             {% if log.user == current_user.username %}
-                                <strong style="background: #00e5ff20; padding: 2px 10px; border-radius: 15px;">👤 YOU ({{ log.user }})</strong>
+                                <strong style="background: #00e5ff20; padding: 2px 10px; border-radius: 15px;"><i class="fa-solid fa-user"></i> YOU ({{ log.user }})</strong>
                             {% else %}
-                                👤 {{ log.user }}
+                                <i class="fa-solid fa-user"></i> {{ log.user }}
                             {% endif %}
                         </td>
                         <td>{{ log.action }}</td>
@@ -300,6 +316,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
+    // Show floating toast notification message
     function showToast(msg) {
         const t = document.getElementById('toast');
         t.textContent = msg;
@@ -307,6 +324,7 @@
         setTimeout(() => t.classList.remove('show'), 3000);
     }
 
+    // Load and populate blocked IPs table dynamically with action icons
     function loadBlockedIPs() {
         fetch('/api/blocked-ips')
         .then(r => r.json())
@@ -322,12 +340,13 @@
                     <td>${b.reason}</td>
                     <td>${b.blocked_by}</td>
                     <td>${b.timestamp}</td>
-                    <td><button class="btn btn-success" onclick="unblockIP('${b.ip_address}')">✅</button></td>
+                    <td><button class="btn btn-success" onclick="unblockIP('${b.ip_address}')"><i class="fa-solid fa-check"></i> Unblock</button></td>
                 </tr>
             `).join('');
         });
     }
 
+    // Block target IP address via API call
     function blockIP(ip, reason) {
         if (!confirm(`Block IP ${ip}?\nReason: ${reason}`)) return;
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
@@ -339,14 +358,15 @@
         .then(r => r.json())
         .then(data => {
             if (data.success) {
-                showToast(`🚫 IP ${ip} blocked!`);
+                showToast(`IP ${ip} blocked successfully!`);
                 loadBlockedIPs();
             } else {
-                showToast(`⚠ ${data.error}`);
+                showToast(`Warning: ${data.error}`);
             }
         });
     }
 
+    // Unblock target IP address via API call
     function unblockIP(ip) {
         if (!confirm(`Unblock IP ${ip}?`)) return;
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
@@ -358,10 +378,10 @@
         .then(r => r.json())
         .then(data => {
             if (data.success) {
-                showToast(`✅ IP ${ip} unblocked!`);
+                showToast(`IP ${ip} unblocked successfully!`);
                 loadBlockedIPs();
             } else {
-                showToast(`⚠ ${data.error}`);
+                showToast(`Warning: ${data.error}`);
             }
         });
     }

@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>CCTV Monitor — Dashboard</title>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html { height: 100%; }
@@ -12,28 +14,34 @@
             background: #0a0f1e;
             color: #f9fafb;
             font-family: 'Segoe UI', sans-serif;
-            height: 100vh;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
         }
         .navbar {
             background: #111827;
             border-bottom: 1px solid #1f2937;
-            padding: 14px 30px;
+            padding: 14px 20px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex: 0 0 auto;
+            flex-wrap: wrap;
+            gap: 10px;
         }
         .navbar h1 {
             color: #00e5ff;
             font-size: 18px;
             letter-spacing: 2px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         .nav-links {
             display: flex;
-            gap: 20px;
+            gap: 15px;
             align-items: center;
+            flex-wrap: wrap;
         }
         .nav-links a {
             color: #6b7280;
@@ -49,6 +57,9 @@
             font-size: 11px;
             font-weight: bold;
             letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
         }
         .role-admin {
             background: #1e3a5f;
@@ -60,20 +71,35 @@
         }
         .stats-bar {
             background: #0d1424;
-            padding: 10px 30px;
+            padding: 10px 20px;
             border-bottom: 1px solid #1f2937;
             flex: 0 0 auto;
         }
-        .grid-4 {
+        /* Updated grid to exactly 3 columns with robust mobile adaptation */
+        .grid-3 {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+        @media (max-width: 480px) {
+            .grid-3 {
+                gap: 5px;
+            }
+            .stat-card {
+                padding: 8px 4px !important;
+            }
+            .stat-card .number {
+                font-size: 16px !important;
+            }
+            .stat-card .label {
+                font-size: 9px !important;
+            }
         }
         .stat-card {
             background: #111827;
             border: 1px solid #1f2937;
             border-radius: 10px;
-            padding: 10px 20px;
+            padding: 10px 15px;
             text-align: center;
         }
         .stat-card .number {
@@ -85,15 +111,24 @@
             color: #6b7280;
             font-size: 11px;
             margin-top: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
         }
         .main-content {
             display: grid;
-            grid-template-columns: 1fr 480px;
+            grid-template-columns: 1fr;
             gap: 16px;
-            padding: 16px 30px;
+            padding: 16px 20px;
             flex: 1 1 0;
             min-height: 0;
-            overflow: hidden;
+        }
+        @media(min-width: 1024px) {
+            .main-content {
+                grid-template-columns: 1fr 480px;
+                padding: 16px 30px;
+            }
         }
         .cameras-section {
             background: #111827;
@@ -101,7 +136,7 @@
             border-radius: 10px;
             display: flex;
             flex-direction: column;
-            min-height: 0;
+            min-height: 400px;
             overflow: hidden;
         }
         .cameras-header {
@@ -116,26 +151,42 @@
             color: #00e5ff;
             font-size: 14px;
             letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
         .cameras-grid {
             display: grid;
             gap: 8px;
             padding: 10px;
             flex: 1;
-            min-height: 0;
+            min-height: 250px;
         }
         .cameras-grid:has(> :nth-child(1):last-child) {
             grid-template-columns: 1fr;
             grid-template-rows: 1fr;
         }
         .cameras-grid:has(> :nth-child(2):last-child) {
-            grid-template-columns: repeat(2, 1fr);
-            grid-template-rows: 1fr;
+            grid-template-columns: 1fr;
+            grid-template-rows: repeat(2, 1fr);
+        }
+        @media(min-width: 640px) {
+            .cameras-grid:has(> :nth-child(2):last-child) {
+                grid-template-columns: repeat(2, 1fr);
+                grid-template-rows: 1fr;
+            }
         }
         .cameras-grid:has(> :nth-child(3):last-child),
         .cameras-grid:has(> :nth-child(4):last-child) {
-            grid-template-columns: repeat(2, 1fr);
-            grid-template-rows: repeat(2, 1fr);
+            grid-template-columns: 1fr;
+            grid-template-rows: repeat(4, 1fr);
+        }
+        @media(min-width: 640px) {
+            .cameras-grid:has(> :nth-child(3):last-child),
+            .cameras-grid:has(> :nth-child(4):last-child) {
+                grid-template-columns: repeat(2, 1fr);
+                grid-template-rows: repeat(2, 1fr);
+            }
         }
         .camera-card {
             background: #1f2937;
@@ -144,13 +195,13 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            min-height: 0;
+            min-height: 220px;
             flex: 1;
         }
         .camera-feed {
             background: #000;
             flex: 1;
-            min-height: 0;
+            min-height: 180px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -211,7 +262,6 @@
             flex-direction: column;
             gap: 12px;
             min-height: 0;
-            overflow: hidden;
         }
         .card {
             background: #111827;
@@ -219,7 +269,7 @@
             border-radius: 10px;
             display: flex;
             flex-direction: column;
-            min-height: 0;
+            min-height: 220px;
             overflow: hidden;
             flex: 1;
         }
@@ -235,6 +285,9 @@
             color: #00e5ff;
             font-size: 13px;
             letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
         .card-subtext {
             font-size: 10px;
@@ -294,6 +347,9 @@
             font-weight: bold;
             cursor: pointer;
             transition: opacity 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
         }
         .btn:hover { opacity: 0.8; }
         .btn-primary { background: #00e5ff; color: #0a0f1e; }
@@ -308,18 +364,23 @@
             z-index: 100;
             align-items: center;
             justify-content: center;
+            padding: 15px;
         }
         .modal.active { display: flex; }
         .modal-box {
             background: #111827;
             border: 1px solid #1f2937;
             border-radius: 12px;
-            padding: 30px;
-            width: 420px;
+            padding: 24px;
+            width: 100%;
+            max-width: 420px;
         }
         .modal-box h3 {
             color: #00e5ff;
             margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         .form-group { margin-bottom: 16px; }
         .form-group label {
@@ -343,6 +404,7 @@
             display: flex;
             gap: 16px;
             margin-top: 4px;
+            flex-wrap: wrap;
         }
         .cam-type-row label {
             display: flex;
@@ -370,7 +432,7 @@
         .toast {
             position: fixed;
             bottom: 30px;
-            right: 30px;
+            right: 20px;
             background: #111827;
             border: 1px solid #00e5ff;
             color: #00e5ff;
@@ -386,36 +448,32 @@
 <body>
 
 <div class="navbar">
-    <h1>🎥 CCTV MONITOR</h1>
+    <h1><i class="fa-solid fa-video"></i> CCTV MONITOR</h1>
     <div class="nav-links">
         <span style="color:#6b7280; font-size:13px;" id="current-time"></span>
         {% if current_user.is_admin() %}
-            <span class="role-badge role-admin">🔑 ADMIN</span>
-            <a href="/audit">📋 Audit Log</a>
+            <span class="role-badge role-admin"><i class="fa-solid fa-key"></i> ADMIN</span>
+            <a href="/audit"><i class="fa-solid fa-clipboard-list"></i> Audit Log</a>
         {% else %}
-            <span class="role-badge role-viewer">👁 VIEWER</span>
+            <span class="role-badge role-viewer"><i class="fa-solid fa-eye"></i> VIEWER</span>
         {% endif %}
-        <a href="/logout">Logout</a>
+        <a href="/logout"><i class="fa-solid fa-right-from-bracket"></i> Logout</a>
     </div>
 </div>
 
 <div class="stats-bar">
-    <div class="grid-4">
+    <div class="grid-3">
         <div class="stat-card">
             <div class="number" id="camera-count">{{ cameras|length }}</div>
-            <div class="label">📷 CAMERAS</div>
+            <div class="label"><i class="fa-solid fa-camera"></i> CAMERAS</div>
         </div>
         <div class="stat-card">
             <div class="number" id="device-count">{{ logs|length }}</div>
-            <div class="label">🌐 DEVICES</div>
+            <div class="label"><i class="fa-solid fa-network-wired"></i> DEVICES</div>
         </div>
         <div class="stat-card">
             <div class="number" id="alert-count">{{ unresolved_count }}</div>
-            <div class="label">⚠ ALERTS</div>
-        </div>
-        <div class="stat-card">
-            <div class="number" style="color:#86efac;">LIVE</div>
-            <div class="label">🟢 SYSTEM STATUS</div>
+            <div class="label"><i class="fa-solid fa-triangle-exclamation"></i> ALERTS</div>
         </div>
     </div>
 </div>
@@ -424,20 +482,20 @@
 
     <div class="cameras-section">
         <div class="cameras-header">
-            <h2>📷 CAMERA FEEDS</h2>
+            <h2><i class="fa-solid fa-camera"></i> CAMERA FEEDS</h2>
             {% if current_user.is_admin() %}
-            <button class="btn btn-primary" onclick="openAddCamera()">+ Add Camera</button>
+            <button class="btn btn-primary" onclick="openAddCamera()"><i class="fa-solid fa-plus"></i> Add Camera</button>
             {% endif %}
         </div>
         <div class="cameras-grid" id="cameras-grid">
             {% for camera in cameras %}
             <div class="camera-card" id="cam-{{ camera.id }}">
                 <div class="camera-feed" id="feed-{{ camera.id }}">
-                    <div class="cam-live">● REC</div>
+                    <div class="cam-live">REC</div>
                     {% if camera.ip_address == '0.0.0.0' %}
                         <video id="webcam-video-{{ camera.id }}" autoplay muted playsinline></video>
                         <div class="cam-fallback" id="fallback-{{ camera.id }}" style="display:none; position:absolute; inset:0;">
-                            <div style="font-size:36px;">📷</div>
+                            <div style="font-size:36px;"><i class="fa-solid fa-camera-slash"></i></div>
                             <div style="font-size:11px; color:#374151; margin-top:6px;">Webcam unavailable</div>
                         </div>
                     {% else %}
@@ -446,7 +504,7 @@
                              alt="Camera Feed"
                              onerror="showFallback({{ camera.id }}, '{{ camera.ip_address }}')">
                         <div class="cam-fallback" id="fallback-{{ camera.id }}" style="display:none; position:absolute; inset:0;">
-                            <div style="font-size:36px;">📷</div>
+                            <div style="font-size:36px;"><i class="fa-solid fa-camera-slash"></i></div>
                             <div style="font-size:11px; color:#374151; margin-top:6px;">{{ camera.ip_address }}</div>
                         </div>
                     {% endif %}
@@ -459,14 +517,14 @@
                     <div style="display:flex; gap:6px; align-items:center;">
                         <span class="badge badge-{{ camera.status }}">{{ camera.status|upper }}</span>
                         {% if current_user.is_admin() %}
-                        <button class="btn btn-danger" onclick="deleteCamera({{ camera.id }})">✕</button>
+                        <button class="btn btn-danger" onclick="deleteCamera({{ camera.id }})"><i class="fa-solid fa-xmark"></i></button>
                         {% endif %}
                     </div>
                 </div>
             </div>
             {% else %}
-            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:#374151;">
-                <div style="font-size:48px; margin-bottom:12px;">📷</div>
+            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:#374151; padding:40px;">
+                <div style="font-size:48px; margin-bottom:12px;"><i class="fa-solid fa-video-slash"></i></div>
                 <p style="font-size:13px; color:#6b7280;">No cameras{% if current_user.is_admin() %} — click Add Camera{% endif %}</p>
             </div>
             {% endfor %}
@@ -477,7 +535,7 @@
 
         <div class="card">
             <div class="card-header">
-                <h2>⚠ SECURITY ALERTS</h2>
+                <h2><i class="fa-solid fa-shield-halved"></i> SECURITY ALERTS</h2>
             </div>
             <div class="table-scroll">
                 <table>
@@ -506,7 +564,7 @@
                                 {% if current_user.is_admin() %}
                                 <div style="display:flex; gap:4px;">
                                     <button class="btn btn-success" onclick="resolveAlert({{ alert.id }})">Resolve</button>
-                                    <button class="btn btn-danger" onclick="blockIPFromAlert('{{ alert.source_ip }}', '{{ alert.alert_type }}')">🚫 Block</button>
+                                    <button class="btn btn-danger" onclick="blockIPFromAlert('{{ alert.source_ip }}', '{{ alert.alert_type }}')"><i class="fa-solid fa-ban"></i> Block</button>
                                 </div>
                                 {% else %}
                                 <span style="color:#4b5563; font-size:11px;">View only</span>
@@ -526,8 +584,8 @@
 
         <div class="card">
             <div class="card-header">
-                <h2>🌐 NETWORK DEVICES</h2>
-                <button class="btn btn-primary" id="scan-btn" onclick="refreshDevices()">↻ Refresh</button>
+                <h2><i class="fa-solid fa-network-wired"></i> NETWORK DEVICES</h2>
+                <button class="btn btn-primary" id="scan-btn" onclick="refreshDevices()"><i class="fa-solid fa-rotate"></i> Refresh</button>
             </div>
             <div class="card-subtext" id="agent-status">
                 Updated by local agent every 1 minute
@@ -571,19 +629,19 @@
 {% if current_user.is_admin() %}
 <div class="modal" id="add-camera-modal">
     <div class="modal-box">
-        <h3>📷 Add Camera</h3>
+        <h3><i class="fa-solid fa-camera"></i> Add Camera</h3>
         <div class="form-group">
             <label>Camera Type</label>
             <div class="cam-type-row">
                 <label>
                     <input type="radio" name="cam-type" value="webcam" id="type-webcam"
                            onchange="toggleCamType('webcam')" checked>
-                    🖥️ Webcam (this device)
+                    <i class="fa-solid fa-laptop"></i> Webcam (this device)
                 </label>
                 <label>
                     <input type="radio" name="cam-type" value="ip" id="type-ip"
                            onchange="toggleCamType('ip')">
-                    🌐 IP Camera
+                    <i class="fa-solid fa-globe"></i> IP Camera
                 </label>
             </div>
         </div>
@@ -617,12 +675,14 @@
 <div class="toast" id="toast"></div>
 
 <script>
+    // Update live clock in navbar
     function updateTime() {
         document.getElementById('current-time').textContent = new Date().toLocaleString();
     }
     setInterval(updateTime, 1000);
     updateTime();
 
+    // Show floating toast notification message
     function showToast(msg) {
         const t = document.getElementById('toast');
         t.textContent = msg;
@@ -632,6 +692,7 @@
 
     let sharedWebcamStream = null;
 
+    // Initialize local webcams across video elements
     async function initWebcams() {
         const videos = document.querySelectorAll('video[id^="webcam-video-"]');
         if (videos.length === 0) return;
@@ -651,6 +712,7 @@
         }
     }
 
+    // Show fallback view when camera stream fails
     function showFallback(cameraId) {
         const feed = document.getElementById('feed-' + cameraId);
         const img = feed ? feed.querySelector('img.stream') : null;
@@ -659,6 +721,7 @@
         if (fb) fb.style.display = 'flex';
     }
 
+    // Open modal dialog for adding a new camera feed
     function openAddCamera() {
         const modal = document.getElementById('add-camera-modal');
         if (!modal) return;
@@ -673,15 +736,18 @@
         modal.classList.add('active');
     }
 
+    // Close the add camera modal window
     function closeAddCamera() {
         document.getElementById('add-camera-modal').classList.remove('active');
     }
 
+    // Toggle input fields depending on camera type selection
     function toggleCamType(type) {
         document.getElementById('ip-field').style.display         = type === 'webcam' ? 'none' : 'block';
         document.getElementById('stream-url-field').style.display = type === 'webcam' ? 'none' : 'block';
     }
 
+    // Submit new camera configuration to backend API
     function addCamera() {
         const name     = document.getElementById('cam-name').value.trim();
         const location = document.getElementById('cam-location').value.trim();
@@ -711,6 +777,7 @@
         .catch(() => showToast('Error adding camera'));
     }
 
+    // Delete camera entry by ID
     function deleteCamera(id) {
         if (!confirm('Delete this camera?')) return;
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
@@ -729,10 +796,11 @@
         });
     }
 
+    // Scan and refresh active network devices table
     function refreshDevices() {
         const btn = document.getElementById('scan-btn');
         btn.disabled = true;
-        btn.textContent = 'Loading...';
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Loading...';
 
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         fetch('/api/network/scan', {
@@ -764,10 +832,11 @@
         .catch(() => showToast('Failed to load devices'))
         .finally(() => {
             btn.disabled = false;
-            btn.textContent = '↻ Refresh';
+            btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Refresh';
         });
     }
 
+    // Mark security alert as resolved
     function resolveAlert(id) {
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
         fetch(`/api/alerts/resolve/${id}`, {
@@ -791,6 +860,7 @@
         .catch(() => showToast('Error resolving alert'));
     }
 
+    // Block suspicious IP address from alert panel
     function blockIPFromAlert(ip, alertType) {
         if (!confirm(`Block IP ${ip}?\nReason: ${alertType} attack detected`)) return;
         const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
@@ -802,9 +872,9 @@
         .then(r => r.json())
         .then(data => {
             if (data.success) {
-                showToast(`🚫 IP ${ip} blocked!`);
+                showToast(`IP ${ip} blocked successfully!`);
             } else {
-                showToast(`⚠ ${data.error}`);
+                showToast(`Warning: ${data.error}`);
             }
         })
         .catch(() => showToast('Failed to block IP'));
@@ -812,6 +882,7 @@
 
     document.addEventListener('DOMContentLoaded', initWebcams);
 
+    // Idle session timeout watcher function
     (function () {
         const SESSION_MINUTES = 15;
         const WARN_BEFORE_SECONDS = 120;
@@ -831,7 +902,7 @@
         warnEl.style.cssText = `
             position: fixed;
             bottom: 80px;
-            right: 30px;
+            right: 20px;
             background: #78350f;
             border: 1px solid #fcd34d;
             color: #fcd34d;
@@ -851,7 +922,7 @@
             const secs = secsLeft % 60;
             const timeStr = mins > 0 ? `${mins} min ${secs}s` : `${secs} seconds`;
             warnEl.innerHTML = `
-                ⚠️ <strong>Session expiring soon</strong><br>
+                <i class="fa-solid fa-triangle-exclamation"></i> <strong>Session expiring soon</strong><br>
                 You will be logged out in <strong>${timeStr}</strong> due to inactivity.<br>
                 <span style="font-size:11px; opacity:0.8;">Move your mouse or press any key to stay logged in.</span>
             `;
