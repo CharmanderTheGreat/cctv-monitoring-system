@@ -1,9 +1,21 @@
+# Python and Virtual Environments
 venv/
-.env
 __pycache__/
 *.pyc
 .DS_Store
-cloudflared-windows-amd64.exe
-core_code.txt
+
+# Environment Variables & Secrets
+.env
+
+# Database instances (Local SQLite files)
+backend/instance/
+instance/
+
+# Local Utilities & Temporary Files
 backend/create_user.py
 backend/manage_user.py
+backend/update_role.py
+core_code.txt
+
+# Binaries and Tunnels
+cloudflared-windows-amd64.exe
