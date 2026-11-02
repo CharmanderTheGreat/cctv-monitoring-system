@@ -119,3 +119,14 @@ class TempBlockedIP(db.Model):
     ip_address = db.Column(db.String(50), unique=True, nullable=False)
     blocked_until = db.Column(db.DateTime, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class BlockedDevice(db.Model):
+    __tablename__ = "blocked_devices"
+    id = db.Column(db.Integer, primary_key=True)
+    # Stores MAC address or browser fingerprint hash
+    device_identifier = db.Column(db.String(255), unique=True, nullable=False)
+    # Identifier type: 'mac' or 'fingerprint'
+    identifier_type = db.Column(db.String(50), nullable=False)
+    reason = db.Column(db.String(200))
+    blocked_by = db.Column(db.String(80))
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)

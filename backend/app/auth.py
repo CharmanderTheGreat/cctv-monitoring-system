@@ -6,6 +6,7 @@ from app.models import (
     SecurityAlert,
     BlockedIP,
     TempBlockedIP,
+    BlockedDevice, # Idagdag ito
 )
 from app import db, limiter
 from datetime import datetime, timedelta
@@ -35,13 +36,23 @@ def get_redis():
 # FIXED: Consistent usage of request.remote_addr across all routes.
 # The ProxyFix middleware in __init__.py handles unwrapping X-Forwarded-For
 # so request.remote_addr remains accurate even behind the Railway proxy.
-def get_client_ip():
-    return request.remote_addr
-
-
 def is_ip_blocked(ip):
     if BlockedIP.query.filter_by(ip_address=ip).first():
         return True
+    return False
+def get_client_ip():
+    return request.remote_addr
+
+# Check if the browser device fingerprint is registered as blocked
+def is_device_blocked():
+
+    device_fingerprint = request.cookies.get("device_fingerprint")
+    if device_fingerprint:
+        blocked_dev = BlockedDevice.query.filter_by(
+            device_identifier=device_fingerprint, identifier_type="fingerprint"
+        ).first()
+        if blocked_dev:
+            return True
     return False
 
 
@@ -176,8 +187,9 @@ def login():
 
     ip = get_client_ip()
 
-    if is_ip_blocked(ip):
-        flash("Access denied. Contact administrator.", "danger")
+    # Reject access if either the IP or the Device/Fingerprint is blocked
+    if is_ip_blocked(ip) or is_device_blocked():
+        flash("Access denied. Device or IP blocked.", "danger")
         return render_template("login.html")
 
     if request.method == "POST":

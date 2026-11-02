@@ -328,6 +328,33 @@
             }
         });
     </script>
+    <script>
+    async function generateDeviceFingerprint() {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.textBaseline = "top";
+        ctx.fillText("CCTV_Security_Fingerprint", 2, 2);
+        
+        const fingerprintData = [
+            navigator.userAgent,
+            navigator.language,
+            screen.colorDepth,
+            new Date().getTimezoneOffset(),
+            canvas.toDataURL()
+        ].join('###');
+
+        const encoder = new TextEncoder();
+        const data = encoder.encode(fingerprintData);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        
+        // Save secure cookie lasting for 1 year
+        document.cookie = `device_fingerprint=${hashHex}; path=/; max-age=31536000; Secure; SameSite=Lax`;
+    }
+
+    generateDeviceFingerprint();
+</script>
 </body>
 
 </html>
